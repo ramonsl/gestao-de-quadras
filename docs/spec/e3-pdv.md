@@ -21,7 +21,7 @@ Como operador de caixa, quero lançar produtos e serviços na comanda de um clie
 
 **Critérios de Aceite:**
 *   Permitir buscar e selecionar um cliente cadastrado (via busca rápida por nome ou WhatsApp) para vincular à comanda ativa.
-*   Cada lançamento de item deve gravar internamente: ID do produto/serviço, quantidade, valor unitário (em centavos), ID do operador de caixa e data/hora do lançamento.
+*   Cada lançamento de item deve gravar internamente: ID do produto/serviço, quantidade, **valor unitário no momento do lançamento** (snapshot do preço vigente em centavos/integer), ID do operador de caixa e data/hora do lançamento. O preço gravado é imutável — alterações futuras no cadastro do produto nunca alteram registros já gravados.
 *   Cada lançamento bem-sucedido na comanda de um cliente com opt-in ativo dispara uma notificação WhatsApp em tempo real contendo o item adicionado e o saldo acumulado (ver regras de agrupamento de mensagens em `WPP-02`).
 
 ---

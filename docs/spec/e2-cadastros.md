@@ -26,6 +26,7 @@ Como administrador, quero cadastrar produtos da copa com preço, categoria e est
 
 **Critérios de Aceite:**
 *   Cada produto deve ter: nome, código de barras (opcional), preço de venda (armazenado em centavos/integer), categoria (bebidas, lanches, acessórios, etc.), quantidade em estoque atual e limite de estoque mínimo.
+*   **Alteração de preço:** A atualização do preço de venda de um produto no catálogo altera apenas os **novos lançamentos futuros** no PDV. Itens já registrados em comandas abertas ou fechadas preservam o preço vigente no momento em que foram lançados (snapshot imutável — ver `PDV-02`). Não há retroatividade de preço.
 *   Ao realizar uma venda de produto no PDV, o estoque do item deve ser debitado automaticamente em tempo real no fechamento da comanda.
 *   Exibir alertas visuais no painel de administração e no PDV quando o estoque de um produto atingir o limite mínimo cadastrado.
 

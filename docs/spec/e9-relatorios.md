@@ -10,6 +10,7 @@ Como administrador da arena, quero um dashboard consolidado exibindo o faturamen
 
 **Critérios de Aceite:**
 *   Exibir indicadores numéricos de faturamento bruto do dia atual e acumulado do mês corrente.
+*   **Valores históricos imutáveis:** Todos os cálculos de faturamento nos relatórios são baseados nos preços registrados no momento de cada venda (snapshot). Uma alteração posterior no preço de catálogo de um produto **não** altera os totais de relatórios de períodos anteriores.
 *   **Divisão por Frente de Receita:** Apresentar gráficos de pizza ou barras dividindo as fontes de receita entre:
     *   **Copa/Vendas PDV:** Consumo de produtos e artigos esportivos.
     *   **Locações de Quadra:** Aluguéis de quadra avulsos ou recorrentes.

@@ -47,6 +47,10 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
    comanda ou pontuação de um cliente entre arenas distintas.
 9. **Backoffice Core**: login e credenciais do painel Core (SAAS-11) vivem no
    schema `public`. Nunca misturar autenticação de tenant com a do Core.
+10. **Snapshot de preço**: o campo `unit_price_at_sale` (integer, centavos) é
+    gravado no momento do lançamento do item e é **imutável**. Nenhuma query de
+    relatório, reimpressão de comanda ou cálculo de ponto usa o preço atual do
+    catálogo — sempre o preço da linha da comanda.
 
 ## Fluxo de trabalho (spec-driven)
 

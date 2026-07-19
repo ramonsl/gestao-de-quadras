@@ -35,6 +35,7 @@ Este documento reúne os requisitos não-funcionais transversais, decisões arqu
 | **Perfis de Acesso** | Substituição dos papéis `Administrador / Caixa / Marketing` pelos perfis `Admin / Gerente / Atendente` (decisão de 2026-07-19). Matriz de módulos visíveis por perfil é configurável por arena pelo Admin (SAAS-02, SAAS-10). |
 | **Identidade Global de Clientes** | O WhatsApp é o identificador universal do cliente. Dados pessoais globais (nome, e-mail, nascimento) são armazenados no schema `public` (`global_customers`) e reaproveitados entre arenas. Pontos, comandas, filiação e histórico de consumo são **sempre isolados** no schema do tenant local. Opt-in LGPD é registrado por arena individualmente (CAD-01). |
 | **Backoffice Core** | Login dedicado e separado para o painel de operação do SaaS, com perfis Super Admin (MFA obrigatório) e Suporte (somente-leitura). Credenciais armazenadas no schema `public`, nunca nos schemas de tenant (SAAS-11). |
+| **Snapshot de Preço (Price-at-Time-of-Sale)** | O preço de cada item é gravado como snapshot imutável no momento do lançamento na comanda (`unit_price_at_sale`, em centavos/integer). Alterações posteriores no catálogo de produtos não têm efeito retroativo sobre comandas abertas, fechadas ou em relatórios históricos. Toda query de faturamento usa o preço salvo na linha da comanda, nunca o preço atual do produto (PDV-02, CAD-02, REL-01). |
 
 ---
 

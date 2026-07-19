@@ -15,7 +15,7 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
 - **PostgreSQL** — **um schema por tenant** (`tenant_<slug>`) + schema `public` para
   registro de tenants, planos SaaS e usuários globais
 - **Drizzle ORM** + migrations versionadas aplicadas a todos os schemas
-- **Auth.js** — sessão com `tenantId` e `role` (admin | caixa | marketing)
+- **Auth.js** — sessão com `tenantId`, `role` (admin | gerente | atendente) e `modulesAllowed`
 - **Asaas** — cobrança recorrente (filiação e assinaturas do SaaS)
 - **Baileys** — WhatsApp, SEMPRE atrás da interface `MessagingProvider` (nunca
   importar Baileys fora de `packages/messaging`)
@@ -29,9 +29,11 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
 2. **Testes obrigatórios**: toda função de serviço tem teste unitário (Vitest);
    toda US tem teste e2e (Playwright) derivado dos critérios de aceite. PR sem
    teste não é aceito.
-3. **Permissões**: toda rota/ação valida o `role`. Ações sensíveis (estorno,
-   sangria, desconto manual, config de pontos) exigem `admin` e geram registro
-   de auditoria.
+3. **Permissões**: toda rota/ação valida o `role` E os `modulesAllowed` da sessão.
+   Papéis: `admin` (irrestrito), `gerente` (operacional), `atendente` (PDV/grade).
+   Ações sensíveis (estorno, sangria, desconto manual, config de pontos) exigem
+   `admin` ou `gerente` e geram registro de auditoria. Cancelamentos e estornos
+   por `atendente` exigem autorização explícita de `admin` ou `gerente`.
 4. **WhatsApp**: mensagens saem apenas pela fila (`notification.queue`), nunca
    síncronas no request. Respeitar opt-in/opt-out (LGPD).
 5. **Pontos**: crédito só no fechamento da comanda; estorno de item estorna
@@ -39,6 +41,12 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
 6. **Dinheiro**: valores monetários em centavos (integer). Nunca float.
 7. **Spec viva**: divergência entre código e spec → atualizar `docs/spec/` no
    mesmo PR (agente spec-keeper).
+8. **Identidade global de clientes**: o WhatsApp é o identificador universal
+   (`global_customers` no schema `public`). Pontos, comandas e histórico são
+   **sempre isolados** no schema do tenant. Nenhuma query pode cruzar saldo,
+   comanda ou pontuação de um cliente entre arenas distintas.
+9. **Backoffice Core**: login e credenciais do painel Core (SAAS-11) vivem no
+   schema `public`. Nunca misturar autenticação de tenant com a do Core.
 
 ## Fluxo de trabalho (spec-driven)
 

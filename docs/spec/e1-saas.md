@@ -17,25 +17,31 @@ Como operador do SaaS, quero provisionar uma nova arena (tenant) com base de dad
 
 ## SAAS-02 [P0] — Perfis de Acesso e Usuários
 **Descrição:**
-Como administrador da arena, quero criar e gerenciar usuários com perfis de acesso (Administrador, Caixa, Marketing), para que cada função veja apenas o que precisa.
+Como administrador da arena, quero criar e gerenciar usuários com perfis de acesso (Admin, Gerente, Atendente), para que cada função veja apenas o que precisa.
+
+> Decisão (2026-07-19): Perfis renomeados de `Administrador / Caixa / Marketing` para `Admin / Gerente / Atendente`, com controle de módulos por perfil configurável.
 
 **Critérios de Aceite:**
-*   Devem existir perfis predefinidos que controlam o acesso a nível de tela e ações permitidas:
-    *   **Administrador:** Acesso irrestrito às configurações de pontos, relatórios, auditoria e cadastros.
-    *   **Caixa:** Acesso exclusivo ao PDV, comandas, abertura/fechamento de caixa e locação de quadras. Ações sensíveis (estornos, sangrias) exigem aprovação/permissão de Administrador.
-    *   **Marketing:** Acesso ao CRM, criação de campanhas e configurações de pontos/benefícios.
-*   Usuários podem ser inativados/suspensos pelo administrador da arena, bloqueando o login imediatamente sem apagar o histórico de ações que o usuário realizou (preservando integridade física e de auditoria).
+*   Devem existir três perfis predefinidos que controlam o acesso a nível de módulo e ações permitidas:
+    *   **Admin:** Acesso irrestrito a todos os módulos e configurações. Único perfil autorizado a acessar Auditoria, Configurações da Arena (`SAAS-09`), Planos de Filiação e dados financeiros consolidados.
+    *   **Gerente:** Acesso a todos os módulos operacionais (PDV, Quadras/Grade, CRM, Filiação, Pontos, Publicidade, Relatórios, WhatsApp). Não acessa Configurações da Arena, Auditoria Financeira nem gerenciamento de usuários.
+    *   **Atendente:** Acesso restrito ao PDV e à grade de quadras. Pode lançar itens em comandas e realizar locações. Cancelamentos e estornos exigem autorização explícita de Gerente ou Admin (ver `PDV-09`).
+*   A **matriz de módulos por perfil é configurável por arena** pelo Admin (ver `SAAS-10`): é possível, por exemplo, habilitar o módulo de CRM para Atendentes ou desabilitar Publicidade para Gerentes.
+*   Usuários podem ser inativados/suspensos pelo Admin da arena, bloqueando o login imediatamente sem apagar o histórico de ações que o usuário realizou (preservando integridade física e de auditoria).
 
 ---
 
 ## SAAS-03 [P0] — Autenticação e Recuperação de Credenciais
 **Descrição:**
-Como usuário, quero autenticar com e-mail e senha e recuperar a senha sozinho, para acessar o sistema com segurança.
+Como usuário da arena, quero autenticar com e-mail e senha, ativar minha conta no primeiro acesso e recuperar credenciais sozinho, para acessar o sistema com segurança.
 
 **Critérios de Aceite:**
-*   Armazenamento seguro de senhas no banco com algoritmo de hash forte (ex: bcrypt ou argon2).
-*   Bloqueio temporário de login por IP ou e-mail após 5 tentativas consecutivas falhas.
-*   Mecanismo de "esqueci minha senha" que envia um link com token temporário e de uso único (expiração em até 24 horas) para o e-mail cadastrado do usuário.
+*   **Tela de Login:** Cada arena possui uma tela de login dedicada acessível pelo subdomínio do tenant (ex.: `arena-x.sistema.com.br/login`). Esta tela é completamente separada do login do backoffice Core (`SAAS-11`).
+*   **Armazenamento seguro:** Senhas armazenadas com algoritmo de hash forte (bcrypt ou argon2). Nenhuma senha é armazenada em texto plano.
+*   **Bloqueio de tentativas:** Bloqueio temporário por IP ou e-mail após 5 tentativas consecutivas falhas com desbloqueio automático após 15 minutos.
+*   **Primeiro acesso:** Usuário criado pelo Admin recebe e-mail com link de ativação de conta (token único, expira em 48 horas). Ao clicar, define sua própria senha antes de acessar o sistema pela primeira vez. Sem ativação, o login é bloqueado.
+*   **Sessão autenticada:** O token de sessão (JWT ou cookie seguro) deve conter: `tenantId`, `userId`, `role` e `modulesAllowed` (lista dos módulos liberados para o perfil do usuário na arena).
+*   **Recuperação de senha:** Link de redefinição com token temporário (único, expira em 24 horas) enviado para o e-mail cadastrado.
 
 ---
 
@@ -92,3 +98,47 @@ Como operador do SaaS, quero cobrança automática das assinaturas das arenas vi
 *   Integração com gateway de pagamentos Asaas para emitir faturas recorrentes de planos contratados ao final do período de carência de cada tenant.
 *   Envio automático de alertas de cobrança por e-mail/WhatsApp antes e após o vencimento.
 *   Em caso de inadimplência prolongada (parâmetro configurável, ex: 15 dias de atraso), o sistema deve suspender o tenant automaticamente (conforme `SAAS-04`).
+
+---
+
+## SAAS-09 [P0] — Configuração e Personalização da Arena
+**Descrição:**
+Como Admin da arena, quero configurar as informações, identidade visual e parâmetros operacionais da minha arena no sistema, para que ela reflita minha marca e meu horário de funcionamento em todos os pontos de contato com o cliente.
+
+**Critérios de Aceite:**
+*   **Identidade:** Permitir upload de **logo** (formatos PNG ou SVG, tamanho máximo de 2MB). A logo é exibida no PDV, nas notificações de WhatsApp (como assinatura da mensagem) e na página pública de reservas.
+*   **Dados da Arena:** Configurar nome de exibição, endereço completo, telefone de contato e e-mail administrativo.
+*   **Fuso Horário e Funcionamento:** Configurar o fuso horário da arena e o horário padrão de funcionamento (usado como referência para a grade de quadras de `CAD-05` e para o agendamento de envios automáticos do CRM).
+*   **Tema da Página Pública:** Personalizar a cor primária e secundária exibidas na página pública de reservas do tenant (`RES-01`).
+*   **Moeda:** Configuração padrão `pt-BR / R$`. Exibição consistente em todas as telas do sistema sem permitir alteração de moeda no v1.
+*   Apenas o perfil **Admin** tem acesso a esta tela de configuração.
+*   Toda alteração nestas configurações gera registro de auditoria (`SAAS-05`).
+
+---
+
+## SAAS-10 [P0] — Matriz de Permissões por Módulo e Perfil
+**Descrição:**
+Como Admin da arena, quero configurar quais módulos do sistema cada perfil (Gerente e Atendente) pode acessar, para personalizar o fluxo de trabalho de acordo com a operação da minha arena.
+
+**Critérios de Aceite:**
+*   O Admin pode habilitar ou desabilitar o acesso a cada módulo individualmente para os perfis **Gerente** e **Atendente**. O perfil **Admin** tem acesso irrestrito e não pode ser restringido.
+*   **Módulos configuráveis:** PDV, Quadras/Grade de Locação, CRM, Filiação, Pontos/Cashback, Publicidade, Relatórios/Dashboard, Configurações de WhatsApp.
+*   **Templates padrão ao criar a arena:**
+    *   Gerente: todos os módulos habilitados exceto Configurações da Arena e Auditoria.
+    *   Atendente: apenas PDV e Quadras/Grade habilitados por padrão.
+*   A sessão de cada usuário ao fazer login deve refletir imediatamente a matriz de permissões vigente no momento do login. Alterações na matriz pelo Admin **não** invalidam sessões ativas — entram em vigor no próximo login do usuário afetado.
+*   Toda alteração na matriz de permissões gera registro de auditoria (`SAAS-05`).
+
+---
+
+## SAAS-11 [P0] — Login e Autenticação do Backoffice SaaS (Core)
+**Descrição:**
+Como operador do SaaS (Super Admin ou Suporte), quero um login dedicado e separado para o painel Core de administração do SaaS, para gerenciar arenas e assinaturas com segurança máxima.
+
+**Critérios de Aceite:**
+*   O painel Core é acessado exclusivamente pela URL `admin.sistema.com.br` (ou rota administrativa equivalente). Não há nenhuma vinculação ou acesso cruzado com os logins de arenas individuais.
+*   **Perfis do Core:**
+    *   **Super Admin:** Acesso irrestrito a todas as funções do painel Core (criar arenas, suspender tenants, editar planos, visualizar métricas).
+    *   **Suporte:** Acesso somente-leitura para fins de diagnóstico (visualizar dados de tenants, histórico de erros, status de conexões WhatsApp). Não pode criar, editar ou excluir recursos.
+*   **MFA Obrigatório:** O perfil Super Admin deve obrigatoriamente ativar autenticação de dois fatores via aplicativo TOTP (ex: Google Authenticator) antes do primeiro acesso ao painel Core. Login sem MFA configurado é bloqueado.
+*   As credenciais de acesso ao Core são armazenadas no schema `public` do banco de dados, completamente separadas das credenciais dos usuários dos tenants.

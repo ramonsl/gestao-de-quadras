@@ -32,6 +32,9 @@ Este documento reúne os requisitos não-funcionais transversais, decisões arqu
 | **WhatsApp** | Conexão local de WhatsApp via **Baileys** no v1 (escanear QR Code do número próprio de cada arena). Arquitetura de mensageria com fila persistente (BullMQ + Redis) para isolar a dependência do Baileys. |
 | **Hospedagem Baileys** | Para manter o menor custo de RAM e processamento, as conexões Baileys de cada arena serão gerenciadas dinamicamente dentro de um pool assíncrono centralizado no mesmo processo do Worker, compartilhando o runtime Node.js, em vez de criar um processo/contêiner separado por tenant. |
 | **Perfil Professor** | Empurrado para a versão v2 (P2). No v1, a alocação de horários de aulas e controle de presença/pacotes será gerenciada centralmente pelo caixa ou administrador. |
+| **Perfis de Acesso** | Substituição dos papéis `Administrador / Caixa / Marketing` pelos perfis `Admin / Gerente / Atendente` (decisão de 2026-07-19). Matriz de módulos visíveis por perfil é configurável por arena pelo Admin (SAAS-02, SAAS-10). |
+| **Identidade Global de Clientes** | O WhatsApp é o identificador universal do cliente. Dados pessoais globais (nome, e-mail, nascimento) são armazenados no schema `public` (`global_customers`) e reaproveitados entre arenas. Pontos, comandas, filiação e histórico de consumo são **sempre isolados** no schema do tenant local. Opt-in LGPD é registrado por arena individualmente (CAD-01). |
+| **Backoffice Core** | Login dedicado e separado para o painel de operação do SaaS, com perfis Super Admin (MFA obrigatório) e Suporte (somente-leitura). Credenciais armazenadas no schema `public`, nunca nos schemas de tenant (SAAS-11). |
 
 ---
 

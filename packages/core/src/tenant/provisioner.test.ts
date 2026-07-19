@@ -41,12 +41,15 @@ describe("Provisionamento de Tenants (SAAS-01)", () => {
     expect(result.schemaName).toBe(`tenant_${testSlug}`);
 
     // Verifica se o schema foi criado fisicamente no Postgres
-    const schemaCheck = await db.execute<{ n: number }>(sql`
+    const schemaCheck = await db.execute(sql`
       SELECT count(*)::int as n 
       FROM information_schema.schemata 
       WHERE schema_name = ${result.schemaName}
     `);
-    expect(schemaCheck[0].n).toBe(1);
+    
+    // Suporta diferentes formatos de retorno do Drizzle executor
+    const rows = (schemaCheck as any).rows || schemaCheck;
+    expect(rows[0].n).toBe(1);
 
     // Limpeza de testes locais
     await db.execute(sql.raw(`DROP SCHEMA IF EXISTS "${result.schemaName}" CASCADE`));

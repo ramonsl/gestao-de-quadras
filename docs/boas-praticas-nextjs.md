@@ -7,7 +7,21 @@ framework cobre o painel da arena, o PDV em tablet e a página pública de
 reservas (SSR = SEO por arena). O limite: **Baileys e filas precisam de processo
 Node de longa duração**, que não vive dentro do modelo serverless do Next. Por
 isso o worker (`apps/worker`) é um serviço separado no monorepo — o Next nunca
-mantém sessão de WhatsApp nem processa fila.
+mantem sessão de WhatsApp nem processa fila.
+
+## Stack de UI
+
+- **Shadcn/ui** — biblioteca de componentes base. É a primeira fonte a consultar
+  antes de criar qualquer componente. Adicione componentes com `pnpm dlx shadcn@latest add <componente>`.
+- **Tailwind CSS** — utilitários de estilo. Sem CSS modules nem styled-components.
+- **`packages/ui`** — componentes customizados do Arena SaaS (extensões de shadcn
+  ou componentes exclusivos do PDV). Todo componente novo e genérico que não
+  existe em shadcn vai aqui, não dentro de `apps/web`.
+
+> **Regra obrigatória:** antes de criar qualquer componente, faça:
+> 1. `grep -r "ComponentName" packages/ui` — existe no projeto?
+> 2. Consulte [shadcn/ui](https://ui.shadcn.com/docs/components) — existe na biblioteca?
+> Se já existe: use, estenda por composição ou abra uma issue. Não duplique.
 
 ## Estrutura
 
@@ -45,7 +59,10 @@ packages/messaging/  # MessagingProvider (único lugar que conhece Baileys)
 8. **Cache com cuidado em multi-tenant**: nada de cache global de dados de
    tenant. `revalidateTag` com tag prefixada pelo tenant (`t:{id}:comandas`).
 9. **Nada de `any`, nada de `@ts-ignore`** sem comentário justificando. CI roda
-   `typecheck` e bloqueia.
+   `typecheck` e bloqueia. Use `unknown` + type guards ou crie interfaces
+   específicas. Para APIs de terceiros, defina apenas os campos que você usa.
+10. **Boy Scout Rule**: ao tocar em qualquer arquivo, corrija pelo menos os erros
+    de lint presentes nele. Não introduza novos erros — o CI é o guardião.
 
 ## Testes (obrigatórios — regra do CLAUDE.md)
 

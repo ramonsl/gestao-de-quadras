@@ -24,3 +24,11 @@ O plano deve conter, nesta ordem:
 Regras: valores em centavos; toda query com escopo de tenant; WhatsApp só via fila;
 ações sensíveis exigem admin + auditoria. Se a US conflitar com a spec ou com o
 código, PARE e reporte o conflito em vez de decidir sozinho.
+
+## Frontend (quando a US envolve UI)
+- **Stack**: Next.js App Router + TypeScript + Shadcn/ui + Tailwind CSS
+- Antes de propor qualquer componente novo: `grep -r` em `packages/ui` e checar
+  [shadcn/ui](https://ui.shadcn.com). Liste no plano quais componentes existentes
+  serão reutilizados e quais precisarão ser criados em `packages/ui`.
+- Nenhum tipo `any` — prop types e contratos de função com interfaces TypeScript.
+- PDV é touch-first: botões grandes, optimistic UI, debounce em buscas.

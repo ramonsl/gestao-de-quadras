@@ -30,8 +30,9 @@ Implemente a US informada seguindo exatamente este ciclo. Nunca pule etapas.
 - Todos os AC da US devem ter teste correspondente passando
 
 ## 5. Review
-- Acione o subagente **tenant-guard** sobre o diff
-- Corrija todos os BLOQUEANTES e re-rode a revisão até OK
+- Acione o subagente **tenant-guard** sobre o diff para garantir o isolamento estrito de tenants.
+- Acione o subagente **security-guard** sobre o diff para validar segurança de rotas, APIs, dependências e vulnerabilidades de pacotes.
+- Corrija todos os BLOQUEANTES e re-rode as revisões de segurança até obter OK.
 
 ## 6. Fechamento
 - Se alguma decisão mudou a spec, acione o **spec-keeper**

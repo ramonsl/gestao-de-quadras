@@ -2,6 +2,8 @@
 
 Este épico descreve o isolamento de arenas (multi-tenancy), o gerenciamento de usuários de operação e o controle de acesso por módulo.
 
+* **Issue de referência no GitHub:** [Issue #63](https://github.com/ramonsl/gestao-de-quadras/issues/63) (feat(SAAS-12): Cadastro e Gestão de Usuários Operacionais da Arena)
+
 ---
 
 ## US-SAAS-01: Cadastro Simplificado de Usuários Operadores da Arena

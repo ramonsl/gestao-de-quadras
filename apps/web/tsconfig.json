@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@gestao-de-quadras/db": ["../../packages/db/src/index.ts"],
+      "@gestao-de-quadras/db/schema": ["../../packages/db/src/schema.ts"],
+      "@gestao-de-quadras/core": ["../../packages/core/src/index.ts"],
+      "@gestao-de-quadras/core/auth/auth.service": ["../../packages/core/src/auth/auth.service.ts"],
+      "@gestao-de-quadras/core/email/email.provider": ["../../packages/core/src/email/email.provider.ts"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
+}

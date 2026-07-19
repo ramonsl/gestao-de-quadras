@@ -30,7 +30,8 @@ export async function provisionNewTenant(input: ProvisionInput) {
   if (!user) {
     const inserted = await db.insert(users).values({
       email: input.adminEmail,
-      passwordHash: input.passwordHash
+      passwordHash: input.passwordHash,
+      activatedAt: new Date(),
     }).returning();
     user = inserted[0];
   }
@@ -47,8 +48,10 @@ export async function provisionNewTenant(input: ProvisionInput) {
       "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       "user_id" uuid NOT NULL,
       "role" varchar(20) NOT NULL,
+      "modules_allowed" text DEFAULT '[]' NOT NULL,
       "status" varchar(20) DEFAULT 'active' NOT NULL,
-      "created_at" timestamp DEFAULT now() NOT NULL
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
     );
   `));
 
@@ -63,9 +66,11 @@ export async function provisionNewTenant(input: ProvisionInput) {
   `));
 
   // 5. Cadastra o vínculo de administrador do usuário no schema do tenant
+  // Admin possui acesso a todos os módulos por padrão
+  const allModules = JSON.stringify(['pdv', 'quadras', 'crm', 'filiacao', 'pontos', 'publicidade', 'relatorios', 'whatsapp', 'configuracoes']);
   await db.execute(sql.raw(`
-    INSERT INTO "${schemaName}"."users_tenants" (user_id, role, status)
-    VALUES ('${user.id}', 'admin', 'active');
+    INSERT INTO "${schemaName}"."users_tenants" (user_id, role, modules_allowed, status)
+    VALUES ('${user.id}', 'admin', '${allModules}', 'active');
   `));
 
   return {

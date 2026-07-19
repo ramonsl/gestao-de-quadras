@@ -29,7 +29,7 @@ Use **sempre** as variáveis CSS do design system, nunca valores literais:
 
 ## 4. Conteúdo e microcopy
 - **Idioma:** português (BR), tom operacional. Sem marketing, sem "você/nós" gratuito.
-- **Emoji:** proibido. Usar setas unicode (▲ ▶ ◀ →) e ×.
+- **Emoji:** proibido na **UI do sistema** (botões, labels, toasts, menus). Templates de mensagens WhatsApp (em `packages/messaging/`) podem e devem usar emojis — é uma convenção do canal.
 - **Dinheiro:** sempre `R$ 0.000,00`. Placeholder: `R$ 00,00`.
 - **Toast:** confirma a ação E a consequência. Ex.: "Comanda fechada · 128 pontos creditados".
 - Cada tela crítica deve ter o microcopy da regra de negócio correspondente (ver `docs/design-system.md`).

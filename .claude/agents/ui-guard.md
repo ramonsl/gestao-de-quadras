@@ -25,8 +25,9 @@ produto e confunde o operador de caixa.
 - Overlines de seção estão em CAIXA ALTA com letter-spacing 0.08em? → ATENÇÃO.
 
 ### 3. Conteúdo e microcopy
-- Há emoji na UI? → BLOQUEANTE (proibido pelo design system).
-- Textos em inglês ou tom de marketing ("Você ganhou!", "Parabéns!")? → BLOQUEANTE.
+- Há emoji em elementos de **UI do sistema** (labels, botões, toasts, cabeçalhos, menus)? → BLOQUEANTE.
+  ⚠️ **Exceção:** templates de mensagens de WhatsApp enviadas ao cliente (arquivos em `apps/worker/` ou `packages/messaging/`) **podem e devem** usar emojis — é uma convenção do canal.
+- Textos em inglês ou tom de marketing na UI? → BLOQUEANTE.
 - Valores monetários formatados como `R$ 0.000,00`? → ATENÇÃO se divergir.
 - Toast exibe ação + consequência juntas? → ATENÇÃO se omitir a consequência.
 

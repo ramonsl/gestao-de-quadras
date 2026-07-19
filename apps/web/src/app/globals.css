@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Arena SaaS — Design System Tokens
+   Fonte da verdade: docs/design-system.md
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* Fundos */
+    --bg-app: #f6f5f2;
+    --bg-sunken: #fafaf9;
+    --bg-white: #ffffff;
+
+    /* Acento */
+    --accent: oklch(0.48 0.13 255);
+    --accent-hover: oklch(0.42 0.13 255);
+    --accent-bright: oklch(0.55 0.14 255);
+    --accent-tint: oklch(0.95 0.13 255);
+    --accent-tint-soft: oklch(0.98 0.13 255);
+
+    /* Sidebar */
+    --sidebar-bg: #171d29;
+    --sidebar-hover: #222b3c;
+
+    /* Semânticas */
+    --success: oklch(0.5 0.13 150);
+    --success-bg: oklch(0.97 0.05 150);
+    --success-border: oklch(0.9 0.08 150);
+    --warning: #c9a13c;
+    --warning-bg: #fef9ec;
+    --warning-border: #f3dfaa;
+    --danger: #b0433a;
+    --danger-bg: #fdf3f2;
+    --danger-border: #f4c5c2;
+
+    /* Texto */
+    --text-1: #1a1916;
+    --text-2: #4a4845;
+    --text-3: #9a9895;
+    --text-disabled: #c6c4bb;
+
+    /* Bordas */
+    --border: #e8e6e0;
+    --border-soft: #f0ede7;
+    --border-dashed: #d4d1cb;
+
+    /* Raios */
+    --radius-control: 7px;
+    --radius-input: 8px;
+    --radius-button: 9px;
+    --radius-card: 10px;
+    --radius-card-touch: 12px;
+    --radius-modal: 14px;
+    --radius-pill: 20px;
+
+    /* Sombras */
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.25);
+    --shadow-toast: 0 8px 24px rgba(0, 0, 0, 0.3);
+
+    /* Gráficos (mono-hue azul) */
+    --chart-1: oklch(0.38 0.13 255);
+    --chart-2: oklch(0.45 0.13 255);
+    --chart-3: oklch(0.52 0.13 255);
+    --chart-4: oklch(0.62 0.13 255);
+    --chart-5: oklch(0.75 0.10 255);
+  }
+
+  html {
+    font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-1);
+    min-height: 100dvh;
+  }
+
+  /* Transição padrão — mínima, sem bounce */
+  *, *::before, *::after {
+    transition-timing-function: ease;
+  }
+}
+
+/* ============================================================
+   Utilitários de design system
+   ============================================================ */
+
+@layer utilities {
+  /* Microcopy de regra de negócio */
+  .text-rule {
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+  }
+
+  /* Overline de seção (CAIXA ALTA) */
+  .text-overline {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  /* KPI number */
+  .text-kpi {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+}

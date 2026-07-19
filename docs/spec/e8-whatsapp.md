@@ -47,3 +47,18 @@ Como administrador da arena, quero uma fila de envio robusta com retentativas au
 *   **Fila Assíncrona:** Toda notificação a ser enviada deve ser inserida na fila `notification.queue` (BullMQ + Redis) pelo serviço de negócio. O processamento ocorre de forma assíncrona pelo Worker, nunca síncrona com a requisição do usuário.
 *   **Estratégia de Retentativas:** Em caso de erro temporário de rede no envio pelo Baileys, o Worker deve realizar retentativas automáticas (máximo de 3 tentativas) aplicando política de backoff exponencial.
 *   **Histórico de Status:** Manter registro do status de cada mensagem (Na Fila, Enviado, Entregue, Erro no Envio com a descrição da falha) associado ao cliente e à comanda de origem.
+
+---
+
+## WPP-05 [P1] — Menu Interativo de Autoatendimento do Cliente no WhatsApp
+**Descrição:**
+Como cliente da arena, quero interagir com o WhatsApp oficial da arena enviando palavras-chave ou acessando um menu de opções, para consultar minha comanda aberta, saldo devedor, meus pontos de fidelidade, atualizar dados ou reservar quadras sem precisar falar com o atendente.
+
+**Critérios de Aceite:**
+*   **Menu de Opções Responde ao Cliente:** Quando o cliente envia uma mensagem como "MENU", "AJUDA" ou "COMANDA", o sistema responde com um menu numerado ou botões de opções:
+    1. 📄 *Ver minha comanda / extrato da arena* (exibe os itens lançados e o total parcial da comanda aberta na arena atual).
+    2. 🪙 *Meus pontos de fidelidade / cashback* (exibe os pontos acumulados e a expiração na arena atual).
+    3. ✏️ *Atualizar meus dados pessoais* (retorna o link direto e seguro da Área do Atleta).
+    4. 🎾 *Reservar uma quadra* (retorna o link público de reservas da arena).
+*   **Isolamento Estrito:** A resposta do WhatsApp consulta exclusivamente os dados da arena à qual aquele número está conectado. Informações de consumo, faturas e comandas de outras arenas **nunca** são exibidas.
+*   **Respostas Rápidas e Idempotentes:** Respostas a mensagens recebidas são processadas por workers em segundo plano e com prevenção contra loops ou envios repetidos em curtos intervalos.

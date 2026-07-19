@@ -65,12 +65,17 @@ Como administrador, quero cadastrar a grade de horários disponíveis de cada qu
 
 ---
 
-## CAD-06 [P1] — Atualização de Dados Globais e Exclusão (LGPD)
+## CAD-06 [P1] — Atualização de Dados Globais, Área do Atleta e Exclusão (LGPD)
 **Descrição:**
-Como cliente, quero poder atualizar meus dados pessoais globais (nome, e-mail, foto) em qualquer arena onde sou cadastrado e solicitar a exclusão completa do meu registro, para exercer meu direito à privacidade conforme a LGPD.
+Como cliente, quero poder atualizar meus dados pessoais globais (nome, e-mail, foto) através da Área do Atleta, pelo WhatsApp ou via Atendente em qualquer arena, e ver o histórico de comandas/pontos da arena atual; e solicitar a exclusão completa do meu registro (LGPD).
 
 **Critérios de Aceite:**
-*   **Atualização global:** Quando um Atendente ou Gerente atualiza nome, e-mail ou foto no cadastro local de um cliente, as alterações são propagadas para o registro global (`global_customers` no schema `public`), ficando visíveis no próximo acesso do cliente em qualquer outra arena.
+*   **Área do Atleta (Portal Web):** O cliente possui uma página própria de autoatendimento (ex.: `arena-x.sistema.com.br/atleta` ou portal global). O cliente pode autenticar-se (via OTP WhatsApp/Magic Link) para:
+    *   Atualizar dados pessoais globais (nome, e-mail, data de nascimento, foto).
+    *   Visualizar o histórico de suas comandas e extrato de consumo daquela arena específica (isolado).
+    *   Consultar seu saldo de pontos/cashback daquela arena (`PTS-03`).
+    *   Reservar quadras (`RES-01`).
+*   **Atualização global:** Quando o próprio cliente (na Área do Atleta ou pelo WhatsApp), ou um Atendente/Gerente no PDV atualiza dados globais, as alterações são salvas no schema `public.global_customers` e refletidas automaticamente no perfil do cliente em todas as arenas.
 *   **Campos locais não são propagados:** Opt-in de WhatsApp, nível de fidelidade e preferências de cada arena permanecem exclusivamente no schema local do tenant.
 *   **Direito ao Esquecimento (LGPD):** O Admin pode registrar uma solicitação de exclusão global do cliente. O sistema deve:
     1. Remover o registro global do schema `public`.

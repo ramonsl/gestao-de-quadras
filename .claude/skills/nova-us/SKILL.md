@@ -25,6 +25,7 @@ Implemente a US informada seguindo exatamente este ciclo. Nunca pule etapas.
 - Ordem de arquivos: migrations → `packages/core` (serviços e tipos) → rotas/UI (Next.js/Actions) → workers/jobs (se aplicável).
 - Respeite rigorosamente as regras invioláveis do CLAUDE.md (tenant, centavos, filas, etc.).
 - **UI & Types**: usar Shadcn/ui e `packages/ui` (buscar antes de criar componentes). Zero `any` e tipagem TypeScript estrita.
+- **Design System**: ao criar qualquer tela ou componente, consultar a skill **novo-componente** e o documento `docs/design-system.md` para garantir tokens, tipografia, microcopy e comportamentos corretos.
 - **Boy Scout Rule**: ao editar arquivos existentes, resolva os erros de lint que encontrar neles.
 
 ## 4. Testes
@@ -34,6 +35,7 @@ Implemente a US informada seguindo exatamente este ciclo. Nunca pule etapas.
 ## 5. Review
 - Acione o subagente **tenant-guard** sobre o diff para garantir o isolamento estrito de tenants.
 - Acione o subagente **security-guard** sobre o diff para validar segurança de rotas, APIs, dependências e vulnerabilidades de pacotes.
+- Se o diff incluir arquivos de UI (`.tsx`, `.css`), acione o subagente **ui-guard** para validar conformidade com o design system.
 - Corrija todos os BLOQUEANTES e re-rode as revisões de segurança até obter OK.
 
 ## 6. Fechamento e Entrega

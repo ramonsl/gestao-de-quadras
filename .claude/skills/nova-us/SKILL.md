@@ -8,33 +8,39 @@ description: Ciclo completo de implementacao de uma User Story do Arena SaaS - p
 Implemente a US informada seguindo exatamente este ciclo. Nunca pule etapas.
 
 ## 1. Contexto
-- Leia a US e seus critérios de aceite em `docs/spec/`
-- Confirme que não há dependência pendente (US citadas que ainda não existem no código)
-- Se a US for vaga ou conflitar com o código, pare e pergunte antes de codar
+- Busque a especificação da US nos arquivos locais de `docs/spec/`.
+- Consulte a issue correspondente no GitHub usando `gh issue view <ID>` (ou pelo número da issue) para ler os comentários, discussões e alinhamentos recentes que possam não estar consolidados na especificação local.
+- Confirme que não há dependências de código pendentes (outras USs necessárias que ainda não foram implementadas).
+- Se houver divergências ou dúvidas, pare e alinhe com o usuário antes de planejar.
 
 ## 2. Plano
-- Acione o subagente **planner** com o ID da US
-- Apresente o plano ao usuário em resumo; ajuste se ele pedir
+- Acione o subagente **planner** com o ID da US.
+- Apresente o plano ao usuário em resumo; ajuste se ele pedir.
 
 ## 3. Implementação
-- Siga o plano à risca; escopo extra descoberto no caminho vira anotação, não código
-- Ordem: migration → `packages/core` (serviço + tipos) → rota/UI → job (se houver)
-- Respeite as regras invioláveis do CLAUDE.md (tenant, centavos, fila, permissões)
-- **UI**: use Shadcn/ui e `packages/ui`. Antes de criar qualquer componente, grep
-  por ele. Zero `any` — tipagem estrita em props e funções de serviço.
-- **Boy Scout Rule**: ao tocar em arquivo existente, corrija os erros de lint do
-  arquivo. Não introduza novos erros.
+- **Git Flow:** Antes de começar a codificar, crie uma branch de feature a partir da branch `dev` usando a convenção:
+  `git checkout dev && git pull && git checkout -b feat/<ID>-nome-da-feature`
+  *(substitua <ID> pelo código da US, ex.: CAD-01)*.
+- Siga o plano à risca; escopo extra descoberto no caminho vira anotação, não código.
+- Ordem de arquivos: migrations → `packages/core` (serviços e tipos) → rotas/UI (Next.js/Actions) → workers/jobs (se aplicável).
+- Respeite rigorosamente as regras invioláveis do CLAUDE.md (tenant, centavos, filas, etc.).
+- **UI & Types**: usar Shadcn/ui e `packages/ui` (buscar antes de criar componentes). Zero `any` e tipagem TypeScript estrita.
+- **Boy Scout Rule**: ao editar arquivos existentes, resolva os erros de lint que encontrar neles.
 
 ## 4. Testes
-- Acione o subagente **test-runner** para escrever e rodar Vitest + Playwright
-- Todos os AC da US devem ter teste correspondente passando
+- Acione o subagente **test-runner** para escrever e rodar Vitest + Playwright.
+- Todos os critérios de aceite (AC) da US devem ter testes automatizados correspondentes passando.
 
 ## 5. Review
 - Acione o subagente **tenant-guard** sobre o diff para garantir o isolamento estrito de tenants.
 - Acione o subagente **security-guard** sobre o diff para validar segurança de rotas, APIs, dependências e vulnerabilidades de pacotes.
 - Corrija todos os BLOQUEANTES e re-rode as revisões de segurança até obter OK.
 
-## 6. Fechamento
-- Se alguma decisão mudou a spec, acione o **spec-keeper**
-- Commit: `feat(<ID>): <resumo>` + corpo listando AC cobertos
-- Resuma para o usuário: o que foi feito, testes criados, pendências
+## 6. Fechamento e Entrega
+- Se alguma decisão técnica ou de negócio alterou os requisitos originais, atualize o arquivo correspondente em `docs/spec/` (e informe o spec-keeper).
+- Faça o commit das alterações: `git add . && git commit -m "feat(<ID>): <breve resumo do que foi feito>"`
+- Envie a branch para o remote: `git push -u origin feat/<ID>-nome-da-feature`
+- **Abertura de PR:** Crie o Pull Request apontando a branch da feature para a branch **`dev`** usando o CLI do GitHub:
+  `gh pr create --base dev --title "feat(<ID>): <Nome da US>" --body "Closes #<Numero da Issue do GitHub>"`
+- **GitHub Projects:** Mova a issue correspondente para a coluna **"Test"** (ou "Em Teste") no quadro de projetos do GitHub usando o CLI do GitHub ou indicando o status ao usuário.
+- Apresente o resumo final do trabalho, o link do PR criado e o status atualizado do ticket no quadro.

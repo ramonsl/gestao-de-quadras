@@ -33,15 +33,19 @@ Como administrador da arena, quero criar e gerenciar usuários com perfis de ace
 
 ## SAAS-03 [P0] — Autenticação e Recuperação de Credenciais
 **Descrição:**
-Como usuário da arena, quero autenticar com e-mail e senha, ativar minha conta no primeiro acesso e recuperar credenciais sozinho, para acessar o sistema com segurança.
+Como usuário da arena, quero autenticar com e-mail/usuário e senha, para acessar o sistema de forma segura, com suporte a fluxos de recuperação específicos dependendo da presença de e-mail.
 
 **Critérios de Aceite:**
-*   **Tela de Login:** Cada arena possui uma tela de login dedicada acessível pelo subdomínio do tenant (ex.: `arena-x.sistema.com.br/login`). Esta tela é completamente separada do login do backoffice Core (`SAAS-11`).
+*   **Tela de Login:** Cada arena possui uma tela de login dedicada acessível pelo subdomínio do tenant (ex.: `arena-x.sistema.com.br/login`). Aceita login por `username` ou `email`. Esta tela é completamente separada do login do backoffice Core (`SAAS-11`).
 *   **Armazenamento seguro:** Senhas armazenadas com algoritmo de hash forte (bcrypt ou argon2). Nenhuma senha é armazenada em texto plano.
-*   **Bloqueio de tentativas:** Bloqueio temporário por IP ou e-mail após 5 tentativas consecutivas falhas com desbloqueio automático após 15 minutos.
-*   **Primeiro acesso:** Usuário criado pelo Admin recebe e-mail com link de ativação de conta (token único, expira em 48 horas). Ao clicar, define sua própria senha antes de acessar o sistema pela primeira vez. Sem ativação, o login é bloqueado.
-*   **Sessão autenticada:** O token de sessão (JWT ou cookie seguro) deve conter: `tenantId`, `userId`, `role` e `modulesAllowed` (lista dos módulos liberados para o perfil do usuário na arena).
-*   **Recuperação de senha:** Link de redefinição com token temporário (único, expira em 24 horas) enviado para o e-mail cadastrado.
+*   **Bloqueio de tentativas:** Bloqueio temporário por IP, e-mail ou username após 5 tentativas consecutivas falhas com desbloqueio automático após 15 minutos.
+*   **Primeiro acesso:** 
+    *   **Com e-mail:** O usuário recebe um e-mail com link de ativação (expira em 48h). Ao clicar, define sua própria senha.
+    *   **Sem e-mail (operador local):** O login é habilitado imediatamente com a senha definida pelo Admin no cadastro (conforme `SAAS-12`). Recomenda-se exigir a alteração no primeiro login.
+*   **Sessão autenticada:** O token de sessão (JWT ou cookie seguro) deve conter: `tenantId`, `userId`, `role` e `modulesAllowed` (lista dos módulos liberados para o usuário/perfil na arena).
+*   **Recuperação de senha:** 
+    *   **Com e-mail:** Link de redefinição enviado para o e-mail cadastrado (token único, expira em 24h).
+    *   **Sem e-mail:** A redefinição é efetuada diretamente pelo Administrador da arena na tela de gestão de usuários (conforme `SAAS-12`).
 
 ---
 
@@ -142,3 +146,30 @@ Como operador do SaaS (Super Admin ou Suporte), quero um login dedicado e separa
     *   **Suporte:** Acesso somente-leitura para fins de diagnóstico (visualizar dados de tenants, histórico de erros, status de conexões WhatsApp). Não pode criar, editar ou excluir recursos.
 *   **MFA Obrigatório:** O perfil Super Admin deve obrigatoriamente ativar autenticação de dois fatores via aplicativo TOTP (ex: Google Authenticator) antes do primeiro acesso ao painel Core. Login sem MFA configurado é bloqueado.
 *   As credenciais de acesso ao Core são armazenadas no schema `public` do banco de dados, completamente separadas das credenciais dos usuários dos tenants.
+
+---
+
+## SAAS-12 [P0] — Cadastro e Gestão de Usuários Operacionais da Arena
+*   **Issue de referência no GitHub:** [Issue #63](https://github.com/ramonsl/gestao-de-quadras/issues/63)
+
+**Descrição:**
+Como Gestor (Admin) de uma Arena, quero cadastrar, editar e inativar os usuários operadores que trabalham na minha arena com um cadastro simplificado e definindo diretamente quais módulos cada usuário terá acesso, para que a equipe local opere o sistema de forma segura e personalizada.
+
+**Critérios de Aceite:**
+*   **Isolamento de Tenant:** O gestor só enxerga e gerencia usuários da **sua própria arena** (tenant). Não há acesso a dados de outras arenas (isolamento por `search_path` do tenant).
+*   **Permissão:** Apenas o perfil **Admin/Gestor** acessa este módulo de gerenciamento de usuários.
+*   **Cadastro simplificado — campos:**
+    *   **Nome completo** (obrigatório)
+    *   **Nome de Usuário / login** (obrigatório, único dentro da arena — identificador para login)
+    *   **Senha inicial** (obrigatória, mínima de 6 caracteres, definida pelo Admin no cadastro)
+    *   **Módulos de Acesso** (obrigatório — seleção de quais módulos o usuário poderá acessar: PDV, CRM, Reservas, Filiação, Cadastros)
+    *   **E-mail** (opcional)
+    *   **Telefone/WhatsApp** (opcional)
+    *   **Status** (ativo/inativo)
+*   **Login imediato:** O usuário cadastrado pode logar imediatamente com seu `username` e senha definidos pelo Admin.
+*   **Edição e Controle de Acesso:** O Admin pode alterar nome, e-mail, telefone, redefinir senha e **alterar quais módulos o usuário pode acessar**. A mudança de acesso aos módulos entra em vigor no próximo login do usuário.
+*   **Inativação (não exclusão):** Usuários são apenas inativados (bloqueando o acesso imediato), preservando o histórico de auditoria.
+*   **Logs de Auditoria:** Toda ação de criação, edição, alteração de módulos de acesso, reset de senha e inativação/reativação de usuário deve gerar um log de auditoria (`audit_logs`) no tenant correspondente.
+*   **Autoproteção:** O Admin não pode inativar nem remover seu próprio acesso a menos que haja outro Admin ativo na arena.
+*   **Listagem:** Lista de usuários com nome, usuário/login, módulos permitidos, status (ativo/inativo) e data do último acesso.
+

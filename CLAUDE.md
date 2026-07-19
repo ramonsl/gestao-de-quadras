@@ -10,6 +10,9 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
 ## Stack (decisões fechadas — não propor troca sem aprovação)
 
 - **Next.js (App Router) + TypeScript** — painel, PDV e página pública de reservas
+- **Shadcn/ui + Tailwind CSS** — biblioteca de componentes e sistema de design.
+  Antes de criar qualquer componente de UI, verificar se já existe em `shadcn/ui`
+  ou em `packages/ui`. Não duplicar componentes existentes.
 - **Worker Node separado** (`apps/worker`) com **BullMQ + Redis** — Baileys, filas de
   notificação, cobranças recorrentes, jobs de CRM (aniversário/inatividade)
 - **PostgreSQL** — **um schema por tenant** (`tenant_<slug>`) + schema `public` para
@@ -51,6 +54,17 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
     gravado no momento do lançamento do item e é **imutável**. Nenhuma query de
     relatório, reimpressão de comanda ou cálculo de ponto usa o preço atual do
     catálogo — sempre o preço da linha da comanda.
+11. **Zero `any` e zero `@ts-ignore`**: não usar o tipo `any` explícito em
+    TypeScript. Usar `unknown` com type guards, ou criar interfaces/types adequados.
+    `@ts-ignore` é proibido sem comentário com justificativa técnica obrigatória.
+    O CI roda `typecheck` e bloqueia o PR se houver erro.
+12. **Componentes reutilizáveis — buscar antes de criar**: antes de implementar
+    qualquer componente de UI ou função utilitária, buscar (Grep/Glob) se já
+    existe em `packages/ui` ou em `shadcn/ui`. Não duplicar. Se precisar ajustar
+    um existente, prefira extensão ou compositão ao início de um novo.
+13. **Boy Scout Rule**: ao tocar em um arquivo, deixe-o mais limpo do que encontrou.
+    Corrija pelo menos os erros de lint do arquivo tocado. Não introduza novos
+    erros — o CI é o guardião.
 
 ## Fluxo de trabalho (spec-driven)
 

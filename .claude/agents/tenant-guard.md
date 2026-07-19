@@ -25,3 +25,11 @@ Checklist obrigatório:
 Saída: lista de achados classificados como BLOQUEANTE / ATENÇÃO / OK, cada um com
 arquivo:linha e a correção sugerida. Se houver qualquer BLOQUEANTE, declare a
 revisão reprovada. Você não edita código — só reporta.
+
+## Qualidade de código (verificar no diff)
+8. **Zero `any`**: algum tipo `any` explícito foi introduzido? Algum `@ts-ignore`
+   sem justificativa? → BLOQUEANTE se sem comentário explicativo.
+9. **Componentes duplicados**: foi criado algum componente de UI que já existe em
+   `packages/ui` ou em `shadcn/ui`? → ATENÇÃO com sugestão de reaproveitamento.
+10. **Boy Scout Rule**: o diff introduziu erros de lint novos no arquivo tocado que
+    não existiam antes? → ATENÇÃO com linha exata.

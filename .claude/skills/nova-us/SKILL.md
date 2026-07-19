@@ -20,6 +20,10 @@ Implemente a US informada seguindo exatamente este ciclo. Nunca pule etapas.
 - Siga o plano à risca; escopo extra descoberto no caminho vira anotação, não código
 - Ordem: migration → `packages/core` (serviço + tipos) → rota/UI → job (se houver)
 - Respeite as regras invioláveis do CLAUDE.md (tenant, centavos, fila, permissões)
+- **UI**: use Shadcn/ui e `packages/ui`. Antes de criar qualquer componente, grep
+  por ele. Zero `any` — tipagem estrita em props e funções de serviço.
+- **Boy Scout Rule**: ao tocar em arquivo existente, corrija os erros de lint do
+  arquivo. Não introduza novos erros.
 
 ## 4. Testes
 - Acione o subagente **test-runner** para escrever e rodar Vitest + Playwright

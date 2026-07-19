@@ -111,3 +111,53 @@ Extraídos exclusivamente do protótipo aprovado:
 --radius-modal: 14px;
 --radius-pill: 20px;
 ```
+
+---
+
+## INTEGRAÇÃO COM TAILWIND CSS E SHADCN/UI
+
+> **Decisão de arquitetura (2026-07-19):** O design system usa tokens CSS customizados
+> integrados ao Tailwind CSS via `tailwind.config.ts` e ao Shadcn/ui via tema sobrescrito.
+> Os três coexistem e são complementares.
+
+### Como funciona
+
+```
+docs/design-system.md  ← fonte de verdade (este arquivo)
+        ↓ implementado em
+apps/web/globals.css   ← define os --tokens CSS na :root
+        ↓ mapeado em
+tailwind.config.ts     ← extend: colors, borderRadius, spacing
+        ↓ disponível como
+classes Tailwind        ← bg-app, text-accent, rounded-card, etc.
+        ↓ aplicado sobre
+Shadcn/ui              ← componentes base sobrescritos com tokens do Arena SaaS
+```
+
+### Regras de implementação
+1. **Tokens CSS primeiro:** declare as variáveis em `globals.css` antes de usar em Tailwind ou Shadcn.
+2. **Tailwind extend, não override:** sempre usar `theme.extend` no `tailwind.config.ts`, nunca sobrescrever o tema completo.
+3. **Shadcn customizado:** ao adicionar componentes Shadcn, ajustar as classes `cn()` para usar os tokens do Arena SaaS em vez das cores padrão do shadcn (ex: `bg-primary` → `bg-accent`).
+4. **Ordem de prioridade de composição:**
+   - Primeiro buscar em **Shadcn/ui** (componente base gratuito).
+   - Depois em **`packages/ui`** (extensões específicas do Arena SaaS).
+   - Só criar do zero se não existir em nenhum dos dois.
+5. **Classes Tailwind utilitárias para layout:** spacing, flex, grid, padding — usar Tailwind diretamente.
+6. **Tokens para identidade visual:** cores, raios, tipografia, sombras — usar as variáveis CSS via `var(--token)` ou as classes mapeadas no Tailwind.
+
+### Mapeamento de classes Tailwind dos tokens
+
+| Token CSS | Classe Tailwind sugerida |
+|---|---|
+| `--bg-app` | `bg-app` |
+| `--bg-sunken` | `bg-sunken` |
+| `--accent` | `bg-accent` / `text-accent` |
+| `--accent-hover` | `hover:bg-accent-hover` |
+| `--text-1` | `text-primary` |
+| `--text-2` | `text-secondary` |
+| `--text-3` | `text-muted` |
+| `--border` | `border-default` |
+| `--radius-card` | `rounded-card` |
+| `--radius-button` | `rounded-button` |
+| `--radius-modal` | `rounded-modal` |
+| `--sidebar-bg` | `bg-sidebar` |

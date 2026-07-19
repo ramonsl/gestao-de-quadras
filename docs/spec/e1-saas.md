@@ -150,16 +150,19 @@ Como operador do SaaS (Super Admin ou Suporte), quero um login dedicado e separa
 ---
 
 ## SAAS-12 [P0] — Cadastro e Gestão de Usuários Operacionais da Arena
-*   **Issue de referência no GitHub:** [Issue #63](https://github.com/ramonsl/gestao-de-quadras/issues/63)
-
 **Descrição:**
-Como Gestor (Admin) de uma Arena, quero cadastrar, editar e inativar os usuários operadores que trabalham na minha arena com um cadastro simplificado e definindo diretamente quais módulos cada usuário terá acesso, para que a equipe local opere o sistema de forma segura e personalizada.
+Como Gestor/Admin da Arena, quero cadastrar e gerenciar usuários operadores da minha arena (mesmo sem e-mail corporativo obrigatoriamente), definindo o perfil e marcando individualmente os módulos permitidos, para dar suporte à operação do caixa e atendimento.
 
 **Critérios de Aceite:**
-*   **Isolamento de Tenant:** O gestor só enxerga e gerencia usuários da **sua própria arena** (tenant). Não há acesso a dados de outras arenas (isolamento por `search_path` do tenant).
-*   **Permissão:** Apenas o perfil **Admin/Gestor** acessa este módulo de gerenciamento de usuários.
-*   **Cadastro simplificado — campos:**
-    *   **Nome completo** (obrigatório)
+1. **Isolamento de Tenant:** O gestor só pode visualizar, criar e gerenciar usuários vinculados ao seu próprio `tenantId` (sua arena). É proibido listar ou associar usuários a outros tenants.
+2. **Campos do Usuário:**
+   - **Nome Completo (`name`):** Obrigatório.
+   - **Nome de Usuário / Login (`username`):** Obrigatório e único no tenant. Permite login de operadores locais.
+   - **Senha (`password`):** Mínimo de 6 caracteres.
+   - **E-mail (`email`):** Opcional. Se fornecido, é usado para recuperação automática de senha e notificações.
+   - **Telefone (`phone`):** Opcional.
+3. **Flexibilidade de Autenticação:** A tela de login (`/login`) aceita login via `username` ou `email`.
+4. **Matriz Granular de Módulos (`modulesAllowed`):** Ao cadastrar ou editar o usuário, o Admin seleciona explicitamente quais módulos ele pode acessar (PDV, Quadras, CRM, Filiação, Pontos, Publicidade, Relatórios, Configurações).
     *   **Nome de Usuário / login** (obrigatório, único dentro da arena — identificador para login)
     *   **Senha inicial** (obrigatória, mínima de 6 caracteres, definida pelo Admin no cadastro)
     *   **Módulos de Acesso** (obrigatório — seleção de quais módulos o usuário poderá acessar: PDV, CRM, Reservas, Filiação, Cadastros)

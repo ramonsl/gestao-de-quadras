@@ -17,7 +17,12 @@ Quando acionado:
 4. US completamente nova: crie com ID sequencial do épico correto (ex.: próxima
    do PDV = PDV-12), formato "Como [persona], quero [capacidade], para [benefício]"
    com AC verificáveis
-5. Liste ao final tudo que foi alterado, para entrar no PR
+5. **Plano de Testes Manuais (QA):** Para cada US nova ou alterada, adicione ao final da especificação (ou atualize) uma seção chamada `> ### Roteiro de Teste Manual (QA)` contendo:
+   - Pré-condições necessárias (ex: "Estar logado como Atendente", "Ter o cliente X cadastrado").
+   - Passo a passo numerado de ações na interface.
+   - Resultado esperado para cada passo.
+   - Casos de borda a validar manualmente (ex: "Tentar passar valor negativo", "Deixar campo obrigatório em branco").
+6. Liste ao final tudo que foi alterado, para entrar no PR.
 
 Regras: não invente requisitos — registre apenas o que foi decidido; mantenha o
 estilo e a numeração existentes; conflitos entre duas US devem ser apontados, não

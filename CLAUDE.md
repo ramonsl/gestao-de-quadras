@@ -73,6 +73,12 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
     qualquer componente de UI ou função utilitária, buscar (Grep/Glob) se já
     existe em `packages/ui` ou em `shadcn/ui`. Não duplicar. Se precisar ajustar
     um existente, prefira extensão ou compositão ao início de um novo.
+    O kit shadcn/ui do app vive em `apps/web/src/components/ui/*` (config em
+    `apps/web/components.json`, helper `cn` em `@/lib/utils`, ícones via
+    `lucide-react`). Os componentes seguem o padrão shadcn (cva + `cn` + Radix),
+    mas são **estilizados pelos tokens do design system** (`var(--accent)`,
+    `--text-*`, `--radius-*`; ver `docs/design-system.md`), NÃO pela paleta
+    genérica do shadcn — ao rodar `shadcn add`, reestilize com os tokens.
 13. **Boy Scout Rule**: ao tocar em um arquivo, deixe-o mais limpo do que encontrou.
     Corrija pelo menos os erros de lint do arquivo tocado. Não introduza novos
     erros — o CI é o guardião.

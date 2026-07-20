@@ -4,6 +4,8 @@ import path from "path";
 export default defineConfig({
   test: {
     environment: "node",
+    // Specs de Playwright (apps/web/e2e) NÃO são testes Vitest — evita coleta acidental
+    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**", "**/*.pw.spec.ts"],
   },
   resolve: {
     alias: {

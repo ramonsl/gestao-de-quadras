@@ -6,6 +6,7 @@ import { activateAccount } from "@gestao-de-quadras/core/auth/auth.service";
 
 const schema = z.object({
   token: z.string().min(1),
+  tenantSlug: z.string().min(1),
   password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres."),
   confirmPassword: z.string(),
 }).refine((d) => d.password === d.confirmPassword, {
@@ -25,6 +26,7 @@ export async function activateAccountAction(
 ): Promise<ActivateAccountActionState> {
   const parsed = schema.safeParse({
     token: formData.get("token"),
+    tenantSlug: formData.get("tenantSlug"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
   });
@@ -33,7 +35,12 @@ export async function activateAccountAction(
     return { status: "validation_error", errors: parsed.error.flatten().fieldErrors };
   }
 
-  const result = await activateAccount(parsed.data.token, parsed.data.password, db);
+  const result = await activateAccount(
+    parsed.data.token,
+    parsed.data.password,
+    `tenant_${parsed.data.tenantSlug}`,
+    db
+  );
 
   if (!result.success) {
     const message =

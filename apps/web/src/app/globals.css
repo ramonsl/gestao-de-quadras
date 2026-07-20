@@ -68,7 +68,7 @@
   }
 
   html {
-    font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

@@ -1,6 +1,6 @@
 import { hash, verify } from "@node-rs/argon2";
 import { randomBytes } from "crypto";
-import { eq, and, gt } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import type * as schema from "@gestao-de-quadras/db/schema";
 
@@ -26,230 +26,264 @@ const RESET_TOKEN_EXPIRY_HOURS = 24;
 
 export type AuthDb = NeonHttpDatabase<typeof schema>;
 
+export interface AuthenticatedUser {
+  id: string;
+  username: string;
+  role: "admin" | "gerente" | "atendente";
+  modulesAllowed: string[];
+  mustChangePassword: boolean;
+}
+
 export type ValidateCredentialsResult =
-  | { success: true; userId: string }
-  | { success: false; reason: "invalid_credentials" | "account_locked" | "account_inactive" };
+  | { success: true; user: AuthenticatedUser }
+  | { success: false; reason: "invalid_credentials" | "account_locked" | "account_inactive" | "not_activated" };
 
 export type TokenOperationResult =
   | { success: true }
   | { success: false; reason: "token_not_found" | "token_expired" };
 
+type AuthUserRow = {
+  id: string;
+  username: string;
+  email: string | null;
+  password_hash: string | null;
+  role: "admin" | "gerente" | "atendente";
+  modules_allowed: string;
+  status: "active" | "inactive";
+  must_change_password: boolean;
+  activated_at: Date | null;
+  activation_token_expires_at: Date | null;
+  reset_token_expires_at: Date | null;
+  failed_attempts: number;
+  locked_until: Date | null;
+}
+
 // ---------------------------------------------------------------------------
-// Funções puras de autenticação
+// Helpers — operadores vivem no schema do tenant (SAAS-12)
+// ---------------------------------------------------------------------------
+
+const SCHEMA_PATTERN = /^tenant_[a-z0-9-]+$/;
+
+function assertSchema(schemaName: string): void {
+  if (!SCHEMA_PATTERN.test(schemaName)) {
+    throw new Error(`Nome de schema de tenant inválido: "${schemaName}".`);
+  }
+}
+
+function usersTable(schemaName: string): SQL {
+  return sql`${sql.identifier(schemaName)}.${sql.identifier("users_tenants")}`;
+}
+
+function parseModules(raw: string): string[] {
+  try {
+    return JSON.parse(raw || "[]");
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Autenticação (login por username OU e-mail dentro do tenant)
 // ---------------------------------------------------------------------------
 
 /**
- * Valida e-mail e senha contra o banco.
+ * Valida credenciais de um operador no schema do tenant. O `identifier` pode ser
+ * o `username` ou o `email`; o tenant já foi resolvido pelo subdomínio (SAAS-03).
  * Gerencia contador de tentativas e bloqueio temporário.
  */
 export async function validateCredentials(
-  email: string,
+  identifier: string,
   password: string,
+  schemaName: string,
   db: AuthDb
 ): Promise<ValidateCredentialsResult> {
-  const { users } = await import("@gestao-de-quadras/db/schema");
+  assertSchema(schemaName);
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase().trim()))
-    .limit(1);
+  const id = identifier.trim().toLowerCase();
+  const byEmail = id.includes("@");
 
-  if (!user || !user.passwordHash) {
+  const result = await db.execute<AuthUserRow>(
+    sql`SELECT id, username, email, password_hash, role, modules_allowed, status,
+               must_change_password, activated_at, activation_token_expires_at,
+               reset_token_expires_at, failed_attempts, locked_until
+        FROM ${usersTable(schemaName)}
+        WHERE ${byEmail ? sql`email = ${id}` : sql`username = ${id}`}
+        LIMIT 1`
+  );
+  const user = (result.rows as unknown as AuthUserRow[])[0];
+
+  if (!user || !user.password_hash) {
     return { success: false, reason: "invalid_credentials" };
   }
 
-  // Verifica se a conta ainda está bloqueada
-  if (user.lockedUntil && user.lockedUntil > new Date()) {
+  if (user.locked_until && new Date(user.locked_until) > new Date()) {
     return { success: false, reason: "account_locked" };
   }
 
-  // Verifica se a conta já foi ativada
-  if (!user.activatedAt) {
+  if (user.status !== "active") {
     return { success: false, reason: "account_inactive" };
   }
 
-  const passwordValid = await verify(user.passwordHash, password);
+  if (!user.activated_at) {
+    return { success: false, reason: "not_activated" };
+  }
+
+  const passwordValid = await verify(user.password_hash, password);
 
   if (!passwordValid) {
-    const newFailedAttempts = user.failedAttempts + 1;
+    const newFailedAttempts = user.failed_attempts + 1;
     const shouldLock = newFailedAttempts >= MAX_FAILED_ATTEMPTS;
+    const lockedUntil = shouldLock ? new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000) : null;
 
-    await db
-      .update(users)
-      .set({
-        failedAttempts: newFailedAttempts,
-        lockedUntil: shouldLock
-          ? new Date(Date.now() + LOCK_DURATION_MINUTES * 60 * 1000)
-          : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, user.id));
+    await db.execute(
+      sql`UPDATE ${usersTable(schemaName)}
+          SET failed_attempts = ${newFailedAttempts}, locked_until = ${lockedUntil}, updated_at = now()
+          WHERE id = ${user.id}`
+    );
 
     return { success: false, reason: shouldLock ? "account_locked" : "invalid_credentials" };
   }
 
-  // Login bem-sucedido: zera o contador
-  await db
-    .update(users)
-    .set({ failedAttempts: 0, lockedUntil: null, updatedAt: new Date() })
-    .where(eq(users.id, user.id));
+  // Login bem-sucedido: zera contador e registra último acesso
+  await db.execute(
+    sql`UPDATE ${usersTable(schemaName)}
+        SET failed_attempts = 0, locked_until = NULL, last_login_at = now(), updated_at = now()
+        WHERE id = ${user.id}`
+  );
 
-  return { success: true, userId: user.id };
+  return {
+    success: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      modulesAllowed: parseModules(user.modules_allowed),
+      mustChangePassword: user.must_change_password,
+    },
+  };
 }
 
-/**
- * Gera e persiste um token de ativação de conta para o usuário.
- * Retorna o token gerado (deve ser enviado por e-mail, nunca exposto na URL
- * de forma previsível).
- */
+// ---------------------------------------------------------------------------
+// Ativação de conta (fluxo por e-mail — operadores COM e-mail)
+// ---------------------------------------------------------------------------
+
+/** Gera e persiste um token de ativação de conta. Retorna o token gerado. */
 export async function createActivationToken(
   userId: string,
+  schemaName: string,
   db: AuthDb
 ): Promise<string> {
-  const { users } = await import("@gestao-de-quadras/db/schema");
+  assertSchema(schemaName);
 
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + ACTIVATION_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
-  await db
-    .update(users)
-    .set({ activationToken: token, activationTokenExpiresAt: expiresAt, updatedAt: new Date() })
-    .where(eq(users.id, userId));
+  await db.execute(
+    sql`UPDATE ${usersTable(schemaName)}
+        SET activation_token = ${token}, activation_token_expires_at = ${expiresAt}, updated_at = now()
+        WHERE id = ${userId}`
+  );
 
   return token;
 }
 
-/**
- * Ativa a conta do usuário definindo sua senha inicial.
- * Invalida o token após uso.
- */
+/** Ativa a conta definindo a senha inicial. Invalida o token após uso. */
 export async function activateAccount(
   token: string,
   newPassword: string,
+  schemaName: string,
   db: AuthDb
 ): Promise<TokenOperationResult> {
-  const { users } = await import("@gestao-de-quadras/db/schema");
+  assertSchema(schemaName);
 
   const now = new Date();
-
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(
-      and(
-        eq(users.activationToken, token),
-        gt(users.activationTokenExpiresAt!, now)
-      )
-    )
-    .limit(1);
+  const found = await db.execute<AuthUserRow>(
+    sql`SELECT id, activation_token_expires_at FROM ${usersTable(schemaName)}
+        WHERE activation_token = ${token} LIMIT 1`
+  );
+  const user = (found.rows as unknown as Array<{ id: string; activation_token_expires_at: Date | null }>)[0];
 
   if (!user) {
-    // Pode ser token inválido OU expirado — verificar qual
-    const [anyUser] = await db
-      .select({ activationTokenExpiresAt: users.activationTokenExpiresAt })
-      .from(users)
-      .where(eq(users.activationToken, token))
-      .limit(1);
-
-    return { success: false, reason: anyUser ? "token_expired" : "token_not_found" };
+    return { success: false, reason: "token_not_found" };
+  }
+  if (!user.activation_token_expires_at || new Date(user.activation_token_expires_at) <= now) {
+    return { success: false, reason: "token_expired" };
   }
 
   const passwordHash = await hash(newPassword);
-
-  await db
-    .update(users)
-    .set({
-      passwordHash,
-      activatedAt: now,
-      activationToken: null,
-      activationTokenExpiresAt: null,
-      updatedAt: now,
-    })
-    .where(eq(users.id, user.id));
+  await db.execute(
+    sql`UPDATE ${usersTable(schemaName)}
+        SET password_hash = ${passwordHash}, activated_at = now(),
+            activation_token = NULL, activation_token_expires_at = NULL, updated_at = now()
+        WHERE id = ${user.id}`
+  );
 
   return { success: true };
 }
 
+// ---------------------------------------------------------------------------
+// Recuperação de senha por e-mail (operadores COM e-mail)
+// ---------------------------------------------------------------------------
+
 /**
- * Cria token de recuperação de senha e o persiste.
- * Retorna o token ou null se o e-mail não for encontrado.
- * (Nunca revelar se o e-mail existe — usar a mesma mensagem ao usuário)
+ * Cria token de recuperação de senha. Retorna o token ou null se o e-mail não
+ * existir no tenant (nunca revelar ao usuário se o e-mail existe).
  */
 export async function createPasswordResetToken(
   email: string,
+  schemaName: string,
   db: AuthDb
 ): Promise<string | null> {
-  const { users } = await import("@gestao-de-quadras/db/schema");
+  assertSchema(schemaName);
 
-  const [user] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, email.toLowerCase().trim()))
-    .limit(1);
-
-  if (!user) {
-    return null;
-  }
+  const found = await db.execute<{ id: string }>(
+    sql`SELECT id FROM ${usersTable(schemaName)} WHERE email = ${email.trim().toLowerCase()} LIMIT 1`
+  );
+  const user = (found.rows as unknown as Array<{ id: string }>)[0];
+  if (!user) return null;
 
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
-  await db
-    .update(users)
-    .set({ resetToken: token, resetTokenExpiresAt: expiresAt, updatedAt: new Date() })
-    .where(eq(users.id, user.id));
+  await db.execute(
+    sql`UPDATE ${usersTable(schemaName)}
+        SET reset_token = ${token}, reset_token_expires_at = ${expiresAt}, updated_at = now()
+        WHERE id = ${user.id}`
+  );
 
   return token;
 }
 
-/**
- * Redefine a senha usando o token de recuperação.
- * Invalida o token após uso.
- */
+/** Redefine a senha usando o token de recuperação. Invalida o token após uso. */
 export async function resetPassword(
   token: string,
   newPassword: string,
+  schemaName: string,
   db: AuthDb
 ): Promise<TokenOperationResult> {
-  const { users } = await import("@gestao-de-quadras/db/schema");
+  assertSchema(schemaName);
 
   const now = new Date();
-
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(
-      and(
-        eq(users.resetToken, token),
-        gt(users.resetTokenExpiresAt!, now)
-      )
-    )
-    .limit(1);
+  const found = await db.execute<{ id: string; reset_token_expires_at: Date | null }>(
+    sql`SELECT id, reset_token_expires_at FROM ${usersTable(schemaName)}
+        WHERE reset_token = ${token} LIMIT 1`
+  );
+  const user = (found.rows as unknown as Array<{ id: string; reset_token_expires_at: Date | null }>)[0];
 
   if (!user) {
-    const [anyUser] = await db
-      .select({ resetTokenExpiresAt: users.resetTokenExpiresAt })
-      .from(users)
-      .where(eq(users.resetToken, token))
-      .limit(1);
-
-    return { success: false, reason: anyUser ? "token_expired" : "token_not_found" };
+    return { success: false, reason: "token_not_found" };
+  }
+  if (!user.reset_token_expires_at || new Date(user.reset_token_expires_at) <= now) {
+    return { success: false, reason: "token_expired" };
   }
 
   const passwordHash = await hash(newPassword);
-
-  await db
-    .update(users)
-    .set({
-      passwordHash,
-      resetToken: null,
-      resetTokenExpiresAt: null,
-      failedAttempts: 0,
-      lockedUntil: null,
-      updatedAt: now,
-    })
-    .where(eq(users.id, user.id));
+  await db.execute(
+    sql`UPDATE ${usersTable(schemaName)}
+        SET password_hash = ${passwordHash}, reset_token = NULL, reset_token_expires_at = NULL,
+            failed_attempts = 0, locked_until = NULL, updated_at = now()
+        WHERE id = ${user.id}`
+  );
 
   return { success: true };
 }

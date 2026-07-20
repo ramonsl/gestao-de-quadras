@@ -150,29 +150,30 @@ Como operador do SaaS (Super Admin ou Suporte), quero um login dedicado e separa
 ---
 
 ## SAAS-12 [P0] — Cadastro e Gestão de Usuários Operacionais da Arena
+
+> **Decisão (2026-07-19):** Operadores da arena são entidades **do tenant** — suas credenciais vivem em `tenant_<slug>.users_tenants`, não em `public.users` (reservado a identidades globais: atletas/CAD-01 e backoffice/SAAS-11). O login resolve o tenant pelo subdomínio (SAAS-03) e autentica dentro do schema da arena. Senha mínima unificada em **8** caracteres (igual aos fluxos por token).
+
 **Descrição:**
-Como Gestor/Admin da Arena, quero cadastrar e gerenciar usuários operadores da minha arena (mesmo sem e-mail corporativo obrigatoriamente), definindo o perfil e marcando individualmente os módulos permitidos, para dar suporte à operação do caixa e atendimento.
+Como Admin da Arena, quero cadastrar e gerenciar os operadores da minha arena (mesmo sem e-mail), definindo perfil e os módulos permitidos, para dar suporte à operação de caixa e atendimento com acessos individuais.
 
 **Critérios de Aceite:**
-1. **Isolamento de Tenant:** O gestor só pode visualizar, criar e gerenciar usuários vinculados ao seu próprio `tenantId` (sua arena). É proibido listar ou associar usuários a outros tenants.
-2. **Campos do Usuário:**
-   - **Nome Completo (`name`):** Obrigatório.
-   - **Nome de Usuário / Login (`username`):** Obrigatório e único no tenant. Permite login de operadores locais.
-   - **Senha (`password`):** Mínimo de 6 caracteres.
-   - **E-mail (`email`):** Opcional. Se fornecido, é usado para recuperação automática de senha e notificações.
-   - **Telefone (`phone`):** Opcional.
-3. **Flexibilidade de Autenticação:** A tela de login (`/login`) aceita login via `username` ou `email`.
-4. **Matriz Granular de Módulos (`modulesAllowed`):** Ao cadastrar ou editar o usuário, o Admin seleciona explicitamente quais módulos ele pode acessar (PDV, Quadras, CRM, Filiação, Pontos, Publicidade, Relatórios, Configurações).
-    *   **Nome de Usuário / login** (obrigatório, único dentro da arena — identificador para login)
-    *   **Senha inicial** (obrigatória, mínima de 6 caracteres, definida pelo Admin no cadastro)
-    *   **Módulos de Acesso** (obrigatório — seleção de quais módulos o usuário poderá acessar: PDV, CRM, Reservas, Filiação, Cadastros)
-    *   **E-mail** (opcional)
-    *   **Telefone/WhatsApp** (opcional)
-    *   **Status** (ativo/inativo)
-*   **Login imediato:** O usuário cadastrado pode logar imediatamente com seu `username` e senha definidos pelo Admin.
-*   **Edição e Controle de Acesso:** O Admin pode alterar nome, e-mail, telefone, redefinir senha e **alterar quais módulos o usuário pode acessar**. A mudança de acesso aos módulos entra em vigor no próximo login do usuário.
-*   **Inativação (não exclusão):** Usuários são apenas inativados (bloqueando o acesso imediato), preservando o histórico de auditoria.
-*   **Logs de Auditoria:** Toda ação de criação, edição, alteração de módulos de acesso, reset de senha e inativação/reativação de usuário deve gerar um log de auditoria (`audit_logs`) no tenant correspondente.
-*   **Autoproteção:** O Admin não pode inativar nem remover seu próprio acesso a menos que haja outro Admin ativo na arena.
-*   **Listagem:** Lista de usuários com nome, usuário/login, módulos permitidos, status (ativo/inativo) e data do último acesso.
+1. **Isolamento de Tenant:** O Admin só visualiza, cria e gerencia operadores da própria arena (schema do tenant da sessão). Nenhum acesso a operadores de outra arena.
+2. **Permissão:** Apenas o perfil **Admin** acessa a gestão de usuários; Gerente e Atendente são bloqueados (redirecionados). Toda ação é auditada.
+3. **Campos do usuário:**
+   - **Nome completo (`name`)** — obrigatório.
+   - **Usuário / login (`username`)** — obrigatório, único no tenant, identificador de login.
+   - **Senha inicial (`password`)** — obrigatória, mínimo 8 caracteres, definida pelo Admin no cadastro.
+   - **E-mail (`email`)** — opcional; quando presente, habilita recuperação de senha por e-mail (SAAS-03).
+   - **Telefone (`phone`)** — opcional.
+   - **Status** — ativo/inativo.
+4. **Autenticação flexível:** a tela de login aceita `username` OU `email`.
+5. **Matriz de módulos por usuário (`modulesAllowed`):** ao criar/editar, o Admin seleciona os módulos: PDV, Quadras/Grade, CRM, Filiação, Pontos, Publicidade, Relatórios, Configurações de WhatsApp. O Admin tem acesso irrestrito (não é limitado pela seleção). *Configurações da Arena (SAAS-09) é sempre exclusiva do Admin e não entra na matriz.*
+6. **Login imediato:** o operador loga assim que criado, com username + senha do Admin — sem etapa de ativação por e-mail.
+7. **Troca de senha no primeiro acesso (configurável):** opção por usuário (`mustChangePassword`), marcada pelo Admin; padrão da arena definido em SAAS-09.
+8. **Edição:** o Admin altera nome, e-mail, telefone, perfil e módulos. Mudança de perfil/módulos vale no próximo login do afetado (SAAS-10). O `username` não é alterável.
+9. **Redefinição de senha pelo Admin:** substitui a recuperação por e-mail para operadores sem e-mail; zera bloqueio/tentativas; auditada.
+10. **Inativação (não exclusão):** operadores são inativados (login bloqueado imediatamente), preservando o histórico de auditoria; o Admin pode reativar.
+11. **Autoproteção:** não é possível inativar nem rebaixar o **último Admin ativo** da arena.
+12. **Auditoria:** criação, edição, alteração de módulos, reset de senha e inativação/reativação geram registro em `audit_logs` do tenant (ator = Admin executor).
+13. **Listagem:** nome, usuário/login, perfil, módulos, status e último acesso; com busca.
 

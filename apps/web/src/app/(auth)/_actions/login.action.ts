@@ -5,7 +5,7 @@ import { AuthError } from "next-auth";
 import { z } from "zod";
 
 const loginSchema = z.object({
-  email: z.string().email("E-mail inválido."),
+  identifier: z.string().min(1, "Informe seu usuário ou e-mail."),
   password: z.string().min(1, "Informe a senha."),
   tenantSlug: z.string().min(1),
 });
@@ -21,7 +21,7 @@ export async function loginAction(
   formData: FormData
 ): Promise<LoginActionState> {
   const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
+    identifier: formData.get("identifier"),
     password: formData.get("password"),
     tenantSlug: formData.get("tenantSlug"),
   });
@@ -35,16 +35,16 @@ export async function loginAction(
 
   try {
     await signIn("credentials", {
-      email: parsed.data.email,
+      identifier: parsed.data.identifier,
       password: parsed.data.password,
       tenantSlug: parsed.data.tenantSlug,
-      redirectTo: "/dashboard",
+      redirectTo: "/usuarios",
     });
   } catch (error) {
     if (error instanceof AuthError) {
       switch (error.type) {
         case "CredentialsSignin":
-          return { status: "error", message: "E-mail ou senha incorretos. Verifique e tente novamente." };
+          return { status: "error", message: "Usuário ou senha incorretos. Verifique e tente novamente." };
         default:
           return { status: "error", message: "Erro ao autenticar. Tente novamente." };
       }

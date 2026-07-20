@@ -32,7 +32,7 @@ export async function forgotPasswordAction(
 
   const { email, tenantSlug } = parsed.data;
 
-  const token = await createPasswordResetToken(email, db);
+  const token = await createPasswordResetToken(email, `tenant_${tenantSlug}`, db);
 
   // Sempre retornar "sent" — não revelar se o e-mail existe (segurança)
   if (!token) {

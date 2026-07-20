@@ -8,6 +8,7 @@ import {
   integer,
   boolean,
   uniqueIndex,
+  date,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -54,6 +55,28 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+/**
+ * Clientes GLOBAIS — identidade única por WhatsApp (CAD-01).
+ * Compartilhada entre arenas. Dados: nome, email, data de nascimento, foto.
+ */
+export const globalCustomers = pgTable(
+  "global_customers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    whatsapp: varchar("whatsapp", { length: 15 }).notNull().unique(),
+    name: varchar("name", { length: 100 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    birthDate: date("birth_date"),
+    photoUrl: text("photo_url"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    whatsappIdx: uniqueIndex("global_customers_whatsapp_unique").on(t.whatsapp),
+    nameIdx: index("global_customers_name_idx").on(t.name),
+  })
+);
 
 // ---------------------------------------------------------------------------
 // Schema TEMPLATE (tenant_template) — replicado para cada arena
@@ -128,47 +151,141 @@ export const auditLogs = tenantSchema.table("audit_logs", {
 });
 
 /**
- * Produtos da copa (CAD-02): bebidas, lanches, acessórios.
- * Preço em centavos (integer). Estoque local por tenant.
+ * Clientes LOCAIS — vínculo com arena (CAD-01).
+ * Referencia global_customer. Isolamento total: pontos, comandas, saldo sempre locais.
  */
-export const products = tenantSchema.table(
-  "products",
+export const customers = tenantSchema.table(
+  "customers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    globalCustomerId: uuid("global_customer_id"),
+    whatsapp: varchar("whatsapp", { length: 15 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    birthDate: date("birth_date"),
+    status: varchar("status", { length: 20 }).default("active").notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
   (t) => ({
-    id: t.uuid("id").defaultRandom().primaryKey(),
-    name: t.varchar("name", { length: 255 }).notNull(),
-    barcode: t.varchar("barcode", { length: 100 }),
-    salePriceCents: t.integer("sale_price_cents").notNull(),
-    category: t.varchar("category", { length: 100 }).notNull(),
-    currentStock: t.integer("current_stock").notNull().default(0),
-    minStock: t.integer("min_stock").notNull().default(0),
-    createdAt: t.timestamp("created_at").defaultNow().notNull(),
-    updatedAt: t.timestamp("updated_at").defaultNow().notNull(),
-  }),
-  (t) => ({
-    barcodeIdx: index("products_barcode_idx").on(t.barcode),
-    categoryIdx: index("products_category_idx").on(t.category),
+    whatsappUnique: uniqueIndex("customers_whatsapp_unique").on(t.whatsapp),
+    globalIdIdx: index("customers_global_id_idx").on(t.globalCustomerId),
+    nameIdx: index("customers_name_idx").on(t.name),
   })
 );
 
 /**
- * Auditoria de movimentação de estoque (CAD-02).
+ * Consentimento LGPD isolado por arena (CAD-01).
  */
-export const stockMovements = tenantSchema.table(
-  "stock_movements",
+export const customerOptInLgpd = tenantSchema.table(
+  "customer_opt_in_lgpd",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    customerId: uuid("customer_id").notNull(),
+    optIn: boolean("opt_in").default(false).notNull(),
+    optInAt: timestamp("opt_in_at"),
+    optOutAt: timestamp("opt_out_at"),
+    changedByUserId: uuid("changed_by_user_id"),
+    changedAt: timestamp("changed_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
   (t) => ({
-    id: t.uuid("id").defaultRandom().primaryKey(),
-    productId: t
-      .uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    quantityChange: t.integer("quantity_change").notNull(),
-    reason: t.varchar("reason", { length: 50 }).notNull(),
-    userId: t.uuid("user_id"),
-    notes: t.text("notes"),
-    createdAt: t.timestamp("created_at").defaultNow().notNull(),
-  }),
+    customerIdUnique: uniqueIndex("customer_opt_in_lgpd_customer_id_unique").on(t.customerId),
+    optInIdx: index("customer_opt_in_lgpd_opt_in_idx").on(t.optIn),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Quadras, Serviços e Aulas (CAD-03, CAD-05)
+// ---------------------------------------------------------------------------
+
+export const courts = tenantSchema.table(
+  "courts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    modality: varchar("modality", { length: 50 }).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
   (t) => ({
-    productIdIdx: index("stock_movements_product_id_idx").on(t.productId),
+    modalityIdx: index("courts_modality_idx").on(t.modality),
+    isActiveIdx: index("courts_is_active_idx").on(t.isActive),
+  })
+);
+
+export const courtServices = tenantSchema.table(
+  "court_services",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    courtId: uuid("court_id").notNull(),
+    serviceType: varchar("service_type", { length: 50 }).notNull(),
+    basePriceInCents: integer("base_price_in_cents").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    courtIdIdx: index("court_services_court_id_idx").on(t.courtId),
+    serviceTypeIdx: index("court_services_service_type_idx").on(t.serviceType),
+  })
+);
+
+export const courtTimeSlots = tenantSchema.table(
+  "court_time_slots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    courtId: uuid("court_id").notNull(),
+    dayOfWeek: integer("day_of_week").notNull(),
+    startTimeHHMM: varchar("start_time_hhmm", { length: 5 }).notNull(),
+    endTimeHHMM: varchar("end_time_hhmm", { length: 5 }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    priceInCents: integer("price_in_cents").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    courtIdIdx: index("court_time_slots_court_id_idx").on(t.courtId),
+    dayOfWeekIdx: index("court_time_slots_day_of_week_idx").on(t.dayOfWeek),
+  })
+);
+
+export const classPackages = tenantSchema.table(
+  "class_packages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    totalClassCount: integer("total_class_count").notNull(),
+    priceInCents: integer("price_in_cents").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    isActiveIdx: index("class_packages_is_active_idx").on(t.isActive),
+  })
+);
+
+export const studentClassBalance = tenantSchema.table(
+  "student_class_balance",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    globalCustomerId: uuid("global_customer_id").notNull(),
+    classPackageId: uuid("class_package_id").notNull(),
+    remainingClasses: integer("remaining_classes").notNull(),
+    purchasedAt: timestamp("purchased_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    globalCustomerIdIdx: index("student_class_balance_global_customer_id_idx").on(
+      t.globalCustomerId
+    ),
+    classPackageIdIdx: index("student_class_balance_class_package_id_idx").on(
+      t.classPackageId
+    ),
   })
 );
 
@@ -180,9 +297,21 @@ export type Tenant = typeof tenants.$inferSelect;
 export type NewTenant = typeof tenants.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type GlobalCustomer = typeof globalCustomers.$inferSelect;
+export type NewGlobalCustomer = typeof globalCustomers.$inferInsert;
 export type ArenaUser = typeof usersTenants.$inferSelect;
 export type NewArenaUser = typeof usersTenants.$inferInsert;
-export type Product = typeof products.$inferSelect;
-export type NewProduct = typeof products.$inferInsert;
-export type StockMovement = typeof stockMovements.$inferSelect;
-export type NewStockMovement = typeof stockMovements.$inferInsert;
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
+export type CustomerOptInLgpd = typeof customerOptInLgpd.$inferSelect;
+export type NewCustomerOptInLgpd = typeof customerOptInLgpd.$inferInsert;
+export type Court = typeof courts.$inferSelect;
+export type NewCourt = typeof courts.$inferInsert;
+export type CourtService = typeof courtServices.$inferSelect;
+export type NewCourtService = typeof courtServices.$inferInsert;
+export type CourtTimeSlot = typeof courtTimeSlots.$inferSelect;
+export type NewCourtTimeSlot = typeof courtTimeSlots.$inferInsert;
+export type ClassPackage = typeof classPackages.$inferSelect;
+export type NewClassPackage = typeof classPackages.$inferInsert;
+export type StudentClassBalance = typeof studentClassBalance.$inferSelect;
+export type NewStudentClassBalance = typeof studentClassBalance.$inferInsert;

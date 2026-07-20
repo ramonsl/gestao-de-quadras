@@ -1,0 +1,140 @@
+<meta charset="utf-8">
+<title>Marcou! — sistema visual adaptado</title>
+<style>
+  :root{ --grn:#3BA45A; --nav:#10263C; --lgt:#8FC9A0; --line:#E4E9EC; --muted:#63737F; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#FCFCFB;color:var(--nav);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 28px 80px}
+  h1{font-size:32px;letter-spacing:-.02em;margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 40px;font-size:15px}
+  h2{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
+     margin:52px 0 18px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  .row{background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px;margin-bottom:16px}
+  .row h3{margin:0 0 4px;font-size:19px}
+  .row p{margin:6px 0 0;font-size:14.5px;color:var(--muted)}
+  .row p strong{color:var(--nav)}
+  .art{margin:6px 0 20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th{text-align:left;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 10px 9px}
+  td{padding:11px 10px;border-top:1px solid var(--line);vertical-align:top}
+  .sw{display:inline-block;width:15px;height:15px;border-radius:4px;vertical-align:-2px;margin-right:7px;border:1px solid rgba(0,0,0,.08)}
+  code{background:#F1F4F6;padding:1px 6px;border-radius:5px;font-size:13px}
+  .note{font-size:13.5px;color:var(--muted);border-left:3px solid var(--line);padding-left:14px;margin-top:14px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+
+<h1>Marcou! — sistema visual adaptado</h1>
+<p class="sub">Seu logo recriado em vetor e estendido para as variações de nome que têm domínio livre. O símbolo (check cuja ponta vira a bola) é forte — dá para carregá-lo inteiro para qualquer um dos nomes.</p>
+
+<h2>1. O original, redesenhado em SVG</h2>
+<div class="row">
+  <div class="art">
+    <svg viewBox="0 0 900 210" width="620" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(10,15)">
+        <rect width="180" height="180" rx="47" fill="#3BA45A"/>
+        <path d="M44 100 L88 150 L146 71" fill="none" stroke="#fff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="146" cy="71" r="27" fill="#3BA45A"/>
+        <circle cx="146" cy="71" r="19" fill="#10263C"/>
+        <rect x="66" y="155" width="44" height="11" rx="5.5" fill="#8FC9A0"/>
+      </g>
+      <text x="228" y="128" font-family="Inter,Helvetica,Arial" font-size="90" font-weight="800" letter-spacing="-3" fill="#10263C">marcou<tspan fill="#3BA45A">!</tspan></text>
+      <text x="232" y="170" font-family="Inter,Helvetica,Arial" font-size="25" font-weight="700" letter-spacing="6.5" fill="#3BA45A">RESERVOU · JOGOU · PONTUOU</text>
+    </svg>
+  </div>
+  <p><strong>O que funciona:</strong> a ponta do check virar bola é uma ideia de uma leitura só — confirmação e esporte no mesmo traço. A barrinha clara embaixo ancora o símbolo como linha de quadra. E a exclamação verde no fim carrega o tom de "fechou!".</p>
+  <p style="margin-top:10px"><strong>O que eu ajustaria:</strong> o assinatura <em>RESERVOU · JOGOU · PONTUOU</em> é ótima, mas é a jornada do <strong>jogador</strong>. Seu cliente é o dono da arena — ver a seção 3.</p>
+</div>
+
+<h2>2. Aplicado às variações com domínio livre</h2>
+
+<div class="row">
+  <h3>Marcou Arena <span style="font-size:13px;color:var(--grn);font-weight:600">· 3/3 domínios</span></h3>
+  <div class="art" style="margin-top:16px">
+    <svg viewBox="0 0 900 210" width="620" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(10,15)">
+        <rect width="180" height="180" rx="47" fill="#3BA45A"/>
+        <ellipse cx="90" cy="150" rx="62" ry="17" fill="#fff" opacity=".18"/>
+        <path d="M44 100 L88 150 L146 71" fill="none" stroke="#fff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="146" cy="71" r="27" fill="#3BA45A"/>
+        <circle cx="146" cy="71" r="19" fill="#10263C"/>
+      </g>
+      <text x="228" y="118" font-family="Inter,Helvetica,Arial" font-size="82" font-weight="800" letter-spacing="-3" fill="#10263C">marcou<tspan fill="#3BA45A">!</tspan></text>
+      <text x="232" y="163" font-family="Inter,Helvetica,Arial" font-size="40" font-weight="300" letter-spacing="15" fill="#5B6D7A">ARENA</text>
+    </svg>
+  </div>
+  <p><strong>Mudança no símbolo:</strong> troquei a barrinha reta por uma <strong>elipse translúcida</strong> sob o check — o piso da arena em perspectiva, em vez da linha de uma quadra só. É uma alteração pequena que muda o que o desenho promete: gerir o espaço inteiro, não uma agenda.</p>
+  <p style="margin-top:10px"><strong>Mudança no wordmark:</strong> "ARENA" em peso leve e bem espaçado, cinza-azulado, para não competir com o "marcou!". Você ganha os três domínios e continua sendo chamado de "Marcou" no boca a boca.</p>
+</div>
+
+<div class="grid">
+  <div class="row">
+    <h3>Quadrei <span style="font-size:13px;color:var(--grn);font-weight:600">· 3/3</span></h3>
+    <div class="art" style="margin-top:14px">
+      <svg viewBox="0 0 430 200" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <g transform="translate(6,12)">
+          <rect width="152" height="152" rx="40" fill="#3BA45A"/>
+          <rect x="34" y="30" width="84" height="92" rx="6" fill="none" stroke="#fff" stroke-width="4" opacity=".38"/>
+          <line x1="34" y1="76" x2="118" y2="76" stroke="#fff" stroke-width="4" opacity=".38"/>
+          <path d="M45 84 L74 116 L118 55" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="118" cy="55" r="22" fill="#3BA45A"/>
+          <circle cx="118" cy="55" r="15" fill="#10263C"/>
+        </g>
+        <text x="184" y="105" font-family="Inter,Helvetica,Arial" font-size="60" font-weight="800" letter-spacing="-2.4" fill="#10263C">quadrei</text>
+        <text x="187" y="136" font-family="Inter,Helvetica,Arial" font-size="16" font-weight="700" letter-spacing="4.2" fill="#3BA45A">A ARENA NO CONTROLE</text>
+      </svg>
+    </div>
+    <p>O check ganha a quadra desenhada atrás em traço fino. Mesma família, leitura mais literal.</p>
+  </div>
+
+  <div class="row">
+    <h3>Arenvo <span style="font-size:13px;color:var(--muted);font-weight:600">· 2/3</span></h3>
+    <div class="art" style="margin-top:14px">
+      <svg viewBox="0 0 430 200" width="100%" xmlns="http://www.w3.org/2000/svg">
+        <g transform="translate(6,12)">
+          <rect width="152" height="152" rx="40" fill="#10263C"/>
+          <ellipse cx="76" cy="78" rx="58" ry="35" fill="none" stroke="#3BA45A" stroke-width="5" opacity=".45"/>
+          <path d="M44 78 L70 104 L112 46" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="112" cy="46" r="22" fill="#10263C"/>
+          <circle cx="112" cy="46" r="15" fill="#3BA45A"/>
+        </g>
+        <text x="184" y="105" font-family="Inter,Helvetica,Arial" font-size="60" font-weight="800" letter-spacing="-2.4" fill="#10263C">arenvo</text>
+        <text x="187" y="136" font-family="Inter,Helvetica,Arial" font-size="16" font-weight="700" letter-spacing="4.2" fill="#3BA45A">SUA ARENA INTEIRA</text>
+      </svg>
+    </div>
+    <p>Cores invertidas (fundo navy) e a órbita da arena em volta do check. Mais corporativo.</p>
+  </div>
+</div>
+
+<h2>3. As frases de baixo — proposta de ajuste</h2>
+<p style="font-size:15px;margin:0 0 16px">A estrutura de três verbos no passado é excelente e combina com o nome. O problema é o <strong>último verbo</strong>: "pontuou" fecha na emoção do jogador, e quem assina o boleto é o dono da arena. Trocar só a última palavra mantém o ritmo e muda o destinatário.</p>
+<table>
+  <tr><th>Assinatura</th><th>Fala com</th><th>Quando usar</th></tr>
+  <tr><td><strong style="letter-spacing:1.5px">RESERVOU · JOGOU · PONTUOU</strong></td><td>Jogador</td>
+      <td>Sua versão atual. Guarde para o app do atleta e para redes sociais.</td></tr>
+  <tr><td><strong style="letter-spacing:1.5px;color:#3BA45A">RESERVOU · JOGOU · FATUROU</strong></td><td>Dono da arena</td>
+      <td><strong>A que eu usaria na marca principal.</strong> Mesma cadência, mesma sonoridade em "-ou", e termina no que o cliente compra: dinheiro entrando. Site, proposta comercial, material de vendas.</td></tr>
+  <tr><td><strong style="letter-spacing:1.5px">QUADRA · BAR · CAIXA</strong></td><td>Dono da arena</td>
+      <td>Quando o objetivo for deixar o <em>escopo</em> explícito — mostra em três palavras que não é só agenda. Boa para anúncio e para a home.</td></tr>
+  <tr><td><strong style="letter-spacing:1.5px">MARCOU · JOGOU · FECHOU</strong></td><td>Ambos</td>
+      <td>Puxa o próprio nome para dentro da assinatura. "Fechou" acumula o duplo sentido de partida encerrada e venda concluída.</td></tr>
+</table>
+<p class="note">Sugestão de uso: fixe uma assinatura institucional (<em>reservou · jogou · faturou</em>) e trate as outras como variações de campanha. Trocar a frase é barato; trocar o logo, não.</p>
+
+<h2>4. Especificação</h2>
+<table>
+  <tr><th>Item</th><th>Valor</th></tr>
+  <tr><td>Verde principal</td><td><span class="sw" style="background:#3BA45A"></span><code>#3BA45A</code> — fundo do ícone, exclamação, assinatura</td></tr>
+  <tr><td>Navy</td><td><span class="sw" style="background:#10263C"></span><code>#10263C</code> — wordmark e a bola</td></tr>
+  <tr><td>Verde claro</td><td><span class="sw" style="background:#8FC9A0"></span><code>#8FC9A0</code> — barra de base (versão original)</td></tr>
+  <tr><td>Cinza-azulado</td><td><span class="sw" style="background:#5B6D7A"></span><code>#5B6D7A</code> — palavra "ARENA" no lockup</td></tr>
+  <tr><td>Raio do ícone</td><td>26% do lado (segue a máscara de ícone do iOS)</td></tr>
+  <tr><td>Espessura do check</td><td>11,7% do lado do ícone · pontas e junção arredondadas</td></tr>
+  <tr><td>Anel da bola</td><td>Círculo na cor do fundo, raio 1,42× o da bola — cria o respiro entre bola e check</td></tr>
+  <tr><td>Tipografia</td><td>Wordmark em grotesca peso 800, <em>tracking</em> −3%, tudo minúsculo. Assinatura em 700, caixa alta, <em>tracking</em> +26%</td></tr>
+</table>
+<p class="note">Versão monocromática: em fundo escuro, inverta para ícone branco com bola verde. Tamanho mínimo do ícone: 24 px — abaixo disso, remova a barra de base e engrosse o check em 15%.</p>
+
+</div>

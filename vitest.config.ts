@@ -29,6 +29,11 @@ export default defineConfig({
       "@gestao-de-quadras/core/email/email.provider": path.resolve(__dirname, "./packages/core/src/email/email.provider"),
       "@gestao-de-quadras/core/users/user.service": path.resolve(__dirname, "./packages/core/src/users/user.service"),
       "@gestao-de-quadras/core/users/modules": path.resolve(__dirname, "./packages/core/src/users/modules"),
+      "@gestao-de-quadras/core/whatsapp/whatsapp-connection.service": path.resolve(
+        __dirname,
+        "./packages/core/src/whatsapp/whatsapp-connection.service"
+      ),
+      "@gestao-de-quadras/messaging": path.resolve(__dirname, "./packages/messaging/src/index"),
       "@": path.resolve(__dirname, "./apps/web/src"),
     },
   },

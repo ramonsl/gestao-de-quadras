@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 210" width="900" height="210">
+  <title>Marcou! — reservou · jogou · faturou</title>
+  <g transform="translate(10,15)">
+    <rect width="180" height="180" rx="47" fill="#3BA45A"/>
+    <path d="M44 100 L88 150 L146 71" fill="none" stroke="#ffffff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="146" cy="71" r="27" fill="#3BA45A"/>
+    <circle cx="146" cy="71" r="19" fill="#10263C"/>
+    <rect x="66" y="155" width="44" height="11" rx="5.5" fill="#8FC9A0"/>
+  </g>
+  <text x="228" y="128" font-family="Inter, Helvetica, Arial, sans-serif" font-size="90" font-weight="800" letter-spacing="-3" fill="#10263C">marcou<tspan fill="#3BA45A">!</tspan></text>
+  <text x="232" y="170" font-family="Inter, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="6.5" fill="#3BA45A">RESERVOU · JOGOU · FATUROU</text>
+</svg>

@@ -51,7 +51,7 @@ export async function updateProductAction(
   }
 
   try {
-    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
     const product = await updateProduct(productId, parsed.data, ctx);
     if (!product) return { status: "error", message: "Produto não encontrado" };
     return { status: "success", productId: product.id };

@@ -29,10 +29,10 @@ vi.mock("@node-rs/argon2", () => ({
 // estado de outro teste)
 // ---------------------------------------------------------------------------
 
-const SCHEMA_A = "tenant_arena-a";
+const TENANT_A = "11111111-1111-1111-1111-111111111111";
 
-function makeCtx(mock: MockDb, schemaName = SCHEMA_A): ArenaUserContext {
-  return { db: mock.db, schemaName, actorUserId: "admin-actor-id" };
+function makeCtx(mock: MockDb, tenantId = TENANT_A): ArenaUserContext {
+  return { db: mock.db, tenantId, actorUserId: "admin-actor-id" };
 }
 
 interface UserRowOverrides {
@@ -136,7 +136,7 @@ describe("createArenaUser", () => {
 
     expect(result).toEqual({ success: true, userId: "created-2" });
     // não pode existir SELECT de unicidade de e-mail quando e-mail não é informado
-    const emailCheck = mock.calls.find((c) => /SELECT id/.test(c.text) && /WHERE email =/.test(c.text));
+    const emailCheck = mock.calls.find((c) => /SELECT id/.test(c.text) && /email = /.test(c.text));
     expect(emailCheck).toBeUndefined();
   });
 
@@ -423,34 +423,35 @@ describe("listArenaUsers / getArenaUser", () => {
 // ---------------------------------------------------------------------------
 
 describe("Isolamento de tenant (AC1)", () => {
-  const SCHEMA_B = "tenant_arena-b";
+  const TENANT_B = "22222222-2222-2222-2222-222222222222";
 
-  it("as consultas do tenant B só tocam o schema do tenant B, nunca o do tenant A", async () => {
+  it("as consultas do tenant B filtram tenant_id = B e nunca o do tenant A", async () => {
     const mock = createMockDb({ list: [makeUserRow({ id: "b1", username: "so-do-b" })] });
-    const result = await listArenaUsers(makeCtx(mock, SCHEMA_B));
+    const result = await listArenaUsers(makeCtx(mock, TENANT_B));
 
     expect(result).toHaveLength(1);
     expect(result[0].username).toBe("so-do-b");
-    // toda query gerada referencia o schema do tenant B e nunca o do tenant A
+    // toda query gerada é escopada por tenant_id = B (parâmetro), nunca por A
     expect(mock.calls.length).toBeGreaterThan(0);
     for (const call of mock.calls) {
-      expect(call.text).toContain(`${SCHEMA_B}.users_tenants`);
-      expect(call.text).not.toContain(SCHEMA_A);
+      expect(call.text).toMatch(/tenant_id = /);
+      expect(call.params).toContain(TENANT_B);
+      expect(call.params).not.toContain(TENANT_A);
     }
   });
 
-  it("createArenaUser insere no schema do tenant da sessão, não em outro", async () => {
+  it("createArenaUser grava tenant_id da sessão, não de outro tenant", async () => {
     const mock = createMockDb({ newUserId: "b-created" });
-    await createArenaUser(makeCreateInput({ email: undefined }), makeCtx(mock, SCHEMA_B));
+    await createArenaUser(makeCreateInput({ email: undefined }), makeCtx(mock, TENANT_B));
 
     const insert = userInsert(mock)!;
-    expect(insert.text).toContain(`${SCHEMA_B}.users_tenants`);
-    expect(insert.text).not.toContain(SCHEMA_A);
+    expect(insert.params).toContain(TENANT_B);
+    expect(insert.params).not.toContain(TENANT_A);
   });
 
-  it("rejeita nome de schema fora do padrão tenant_* (defesa contra injeção)", async () => {
+  it("rejeita tenant_id fora do padrão UUID (defesa contra injeção)", async () => {
     const mock = createMockDb();
-    await expect(listArenaUsers(makeCtx(mock, "public"))).rejects.toThrow(/schema de tenant inválido/i);
+    await expect(listArenaUsers(makeCtx(mock, "public"))).rejects.toThrow(/tenant_id inválido/i);
     await expect(listArenaUsers(makeCtx(mock, "tenant_Arena"))).rejects.toThrow();
   });
 });

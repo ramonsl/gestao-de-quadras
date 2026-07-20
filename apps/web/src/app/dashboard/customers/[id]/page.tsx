@@ -19,7 +19,7 @@ export default async function CustomerDetailPage({
     redirect("/dashboard");
   }
 
-  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
   const customer = await getCustomerById(ctx, params.id);
 
   if (!customer) {

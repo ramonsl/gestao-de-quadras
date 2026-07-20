@@ -39,7 +39,7 @@ export async function createServiceAction(formData: FormData) {
   }
 
   try {
-    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
     const service = await createCourtService(ctx, {
       courtId: result.data.courtId,
       serviceType: result.data.serviceType,

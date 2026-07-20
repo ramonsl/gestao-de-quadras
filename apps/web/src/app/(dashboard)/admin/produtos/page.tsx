@@ -12,7 +12,7 @@ export default async function ProdutosPage() {
   if (!s?.user) redirect("/login");
   if (!["admin", "gerente"].includes(s.user.role ?? "")) redirect("/dashboard");
 
-  const ctx = { db, schemaName: `tenant_${s.user.tenantSlug}`, actorUserId: s.user.id };
+  const ctx = { db, tenantId: s.user.tenantId, actorUserId: s.user.id };
   const all = await listProducts({}, ctx);
   const low = await getProductsWithLowStock(ctx);
 

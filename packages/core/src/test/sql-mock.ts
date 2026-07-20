@@ -109,8 +109,8 @@ export function createMockDb(scenario: MockDbScenario = {}): MockDb {
     const isSelect = /^\s*SELECT/i.test(text);
     const isFetchUser = isSelect && /must_change_password/.test(text) && /WHERE id =/.test(text);
     const isList = isSelect && /ORDER BY name/.test(text);
-    const isUsernameCheck = isSelect && /WHERE username =/.test(text) && !isFetchUser;
-    const isEmailCheck = isSelect && /WHERE email =/.test(text) && !isFetchUser;
+    const isUsernameCheck = isSelect && / username = /.test(text) && !isFetchUser;
+    const isEmailCheck = isSelect && / email = /.test(text) && !isFetchUser;
     const isCount = isSelect && /COUNT\(\*\)/.test(text);
     const isUserInsert = /INSERT INTO/i.test(text) && /users_tenants/.test(text);
 

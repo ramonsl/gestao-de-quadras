@@ -49,7 +49,7 @@ export async function createCustomerAction(formData: FormData) {
   try {
     const ctx = {
       db,
-      schemaName: `tenant_${session.user.tenantSlug}`,
+      tenantId: session.user.tenantId,
       actorUserId: session.user.id,
     };
 

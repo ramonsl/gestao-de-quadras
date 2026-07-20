@@ -17,7 +17,7 @@ const ctx = (rowSets: unknown[][]) => {
   let i = 0;
   return {
     db: { execute: async () => ({ rows: rowSets[i++] ?? [] }) },
-    schemaName: "tenant_arena-x",
+    tenantId: "11111111-1111-1111-1111-111111111111",
     actorUserId: "user-1",
   } as any;
 };
@@ -36,11 +36,11 @@ const productRow = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("Product Service", () => {
-  describe("assertSchema", () => {
-    it("rejeita schema de tenant inválido", async () => {
+  describe("assertTenantId", () => {
+    it("rejeita tenant_id inválido", async () => {
       await expect(
-        listProducts(undefined, { db: {}, schemaName: "public; DROP" } as any)
-      ).rejects.toThrow(/schema de tenant inválido/i);
+        listProducts(undefined, { db: {}, tenantId: "public; DROP" } as any)
+      ).rejects.toThrow(/tenant_id inválido/i);
     });
   });
 

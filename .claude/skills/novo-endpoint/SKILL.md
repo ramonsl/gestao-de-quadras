@@ -9,15 +9,17 @@ Todo endpoint do Arena SaaS nasce com as quatro camadas obrigatórias. Nunca cri
 rota "simples para testar depois" — o padrão é barato e evita retrabalho.
 
 ## Camadas obrigatórias (nesta ordem)
-1. **Sessão + tenant**: resolva a sessão (Auth.js) e o tenant (subdomínio via
-   middleware). Sem sessão → 401. Sem tenant → 404. Use o helper
-   `withTenant(handler)` existente; não reimplemente
+1. **Sessão + tenant**: resolva a sessão (Auth.js). Sem sessão → 401; sem tenant
+   → 404. Monte o `TenantContext { db, tenantId, actorUserId }` a partir da sessão
+   (helper `getArenaContext()` em `@/lib/session`) — o `tenantId` (UUID) vem da
+   sessão. Passe o `ctx` para os serviços; NUNCA use uma conexão crua sem tenant
 2. **Permissão**: valide o `role` contra a ação. Matriz de permissões em
    `packages/core/auth/permissions.ts` — adicione a ação lá, nunca inline
 3. **Validação**: parse do input com Zod ANTES de qualquer lógica. Schema junto
    do contrato em `packages/core`, reutilizado pelo teste
 4. **Serviço**: a rota só orquestra — regra de negócio vive em `packages/core`
-   como função pura que recebe `tenantDb` + input validado
+   como função que recebe o `TenantContext` (ctx) + input validado e filtra
+   `tenant_id` em toda query
 
 ## Ações sensíveis (estorno, sangria, desconto, configurações)
 - Role mínimo `admin` + justificativa obrigatória no input

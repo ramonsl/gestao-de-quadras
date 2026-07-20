@@ -1,10 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { ClassPackage } from "@gestao-de-quadras/db/schema";
-import { assertSchema, rows, tenantTable, type TenantContext } from "../db/tenant";
-
-/**
- * Pacotes de aulas (CAD-03). `priceInCents` já chega em centavos (integer).
- */
+import { assertTenantId, rows, type TenantContext } from "../db/tenant";
 
 export interface CreateClassPackageInput {
   name: string;
@@ -14,6 +10,7 @@ export interface CreateClassPackageInput {
 
 type ClassPackageRow = {
   id: string;
+  tenant_id: string;
   name: string;
   total_class_count: number;
   price_in_cents: number;
@@ -22,11 +19,12 @@ type ClassPackageRow = {
   updated_at: Date;
 };
 
-const COLUMNS = sql`id, name, total_class_count, price_in_cents, is_active, created_at, updated_at`;
+const COLS = sql`id, tenant_id, name, total_class_count, price_in_cents, is_active, created_at, updated_at`;
 
 function toClassPackage(row: ClassPackageRow): ClassPackage {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     name: row.name,
     totalClassCount: row.total_class_count,
     priceInCents: row.price_in_cents,
@@ -37,10 +35,10 @@ function toClassPackage(row: ClassPackageRow): ClassPackage {
 }
 
 export async function getClassPackages(ctx: TenantContext): Promise<ClassPackage[]> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<ClassPackageRow>(
-    sql`SELECT ${COLUMNS} FROM ${tenantTable(ctx.schemaName, "class_packages")}
-        ORDER BY created_at DESC`
+    sql`SELECT ${COLS} FROM class_packages
+        WHERE tenant_id = ${ctx.tenantId} ORDER BY created_at DESC`
   );
   return rows<ClassPackageRow>(result).map(toClassPackage);
 }
@@ -49,12 +47,11 @@ export async function createClassPackage(
   ctx: TenantContext,
   input: CreateClassPackageInput
 ): Promise<ClassPackage> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<ClassPackageRow>(
-    sql`INSERT INTO ${tenantTable(ctx.schemaName, "class_packages")}
-          (name, total_class_count, price_in_cents)
-        VALUES (${input.name}, ${input.totalClassCount}, ${input.priceInCents})
-        RETURNING ${COLUMNS}`
+    sql`INSERT INTO class_packages (tenant_id, name, total_class_count, price_in_cents)
+        VALUES (${ctx.tenantId}, ${input.name}, ${input.totalClassCount}, ${input.priceInCents})
+        RETURNING ${COLS}`
   );
   return toClassPackage(rows<ClassPackageRow>(result)[0]);
 }

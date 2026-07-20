@@ -37,7 +37,7 @@ export async function createPackageAction(formData: FormData) {
   }
 
   try {
-    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
     const classPackage = await createClassPackage(ctx, {
       name: result.data.name,
       totalClassCount: result.data.totalClassCount,

@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1784477125183,
-      "tag": "0000_vengeful_magneto",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1784477125184,
-      "tag": "0001_saas12_operators",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1784477125185,
-      "tag": "0002_cad01_customer_identity",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1784477125186,
-      "tag": "0003_cad03_courts_classes",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1784477125187,
-      "tag": "0004_cad02_products",
+      "when": 1784555211484,
+      "tag": "0000_cold_nighthawk",
       "breakpoints": true
     }
   ]

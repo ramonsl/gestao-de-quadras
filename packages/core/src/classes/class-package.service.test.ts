@@ -5,7 +5,7 @@ const ctx = (rowSets: unknown[][]) => {
   let i = 0;
   return {
     db: { execute: async () => ({ rows: rowSets[i++] ?? [] }) },
-    schemaName: "tenant_arena-x",
+    tenantId: "11111111-1111-1111-1111-111111111111",
     actorUserId: "user-1",
   } as any;
 };
@@ -22,9 +22,9 @@ const packageRow = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("Class Package Service", () => {
-  it("rejeita schema de tenant inválido", async () => {
-    await expect(getClassPackages({ db: {}, schemaName: "x" } as any)).rejects.toThrow(
-      /schema de tenant inválido/i
+  it("rejeita tenant_id inválido", async () => {
+    await expect(getClassPackages({ db: {}, tenantId: "x" } as any)).rejects.toThrow(
+      /tenant_id inválido/i
     );
   });
 

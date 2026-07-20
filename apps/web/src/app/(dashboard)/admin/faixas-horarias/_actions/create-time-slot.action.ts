@@ -57,7 +57,7 @@ export async function createTimeSlotAction(formData: FormData) {
   }
 
   try {
-    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
     const slot = await createCourtTimeSlot(ctx, {
       courtId: result.data.courtId,
       dayOfWeek: result.data.dayOfWeek as any,

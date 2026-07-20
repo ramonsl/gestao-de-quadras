@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { assertSchema, rows, tenantTable, type ArenaDb, type TenantContext } from "../db/tenant";
+import { assertTenantId, rows, type ArenaDb, type TenantContext } from "../db/tenant";
 
 const WHATSAPP_E164_REGEX = /^\+(?:[0-9] ?){6,14}[0-9]$/;
 
@@ -22,7 +22,7 @@ export interface GlobalCustomer {
   whatsapp: string;
   name: string;
   email: string | null;
-  /** Coluna `date` do Postgres — o driver retorna string ISO (YYYY-MM-DD). */
+  /** Coluna `date` do Postgres — string ISO (YYYY-MM-DD). */
   birthDate: string | null;
   photoUrl: string | null;
   createdAt: Date;
@@ -31,6 +31,7 @@ export interface GlobalCustomer {
 
 export interface LocalCustomer {
   id: string;
+  tenantId: string;
   globalCustomerId: string | null;
   whatsapp: string;
   name: string;
@@ -55,6 +56,7 @@ type GlobalCustomerRow = {
 
 type LocalCustomerRow = {
   id: string;
+  tenant_id: string;
   global_customer_id: string | null;
   whatsapp: string;
   name: string;
@@ -66,10 +68,9 @@ type LocalCustomerRow = {
   updated_at: Date;
 };
 
-const GLOBAL_COLUMNS = sql`id, whatsapp, name, email, birth_date, photo_url, created_at, updated_at`;
-const LOCAL_COLUMNS = sql`id, global_customer_id, whatsapp, name, email, birth_date, status, created_by_user_id, created_at, updated_at`;
+const GLOBAL_COLS = sql`id, whatsapp, name, email, birth_date, photo_url, created_at, updated_at`;
+const LOCAL_COLS = sql`id, tenant_id, global_customer_id, whatsapp, name, email, birth_date, status, created_by_user_id, created_at, updated_at`;
 
-/** Converte Date → 'YYYY-MM-DD' para colunas `date` do Postgres. */
 function toDateColumn(value: Date | null | undefined): string | null {
   return value ? value.toISOString().slice(0, 10) : null;
 }
@@ -90,6 +91,7 @@ function toGlobal(row: GlobalCustomerRow): GlobalCustomer {
 function toLocal(row: LocalCustomerRow): LocalCustomer {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     globalCustomerId: row.global_customer_id,
     whatsapp: row.whatsapp,
     name: row.name,
@@ -102,9 +104,7 @@ function toLocal(row: LocalCustomerRow): LocalCustomer {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Identidade GLOBAL (schema public) — compartilhada entre arenas
-// ---------------------------------------------------------------------------
+// --- Identidade GLOBAL (sem tenant) -----------------------------------------
 
 export async function findOrCreateGlobalCustomer(
   db: ArenaDb,
@@ -112,7 +112,7 @@ export async function findOrCreateGlobalCustomer(
 ): Promise<{ found: boolean; customer: GlobalCustomer }> {
   const validated = WhatsappSchema.parse(whatsapp);
   const result = await db.execute<GlobalCustomerRow>(
-    sql`SELECT ${GLOBAL_COLUMNS} FROM global_customers WHERE whatsapp = ${validated} LIMIT 1`
+    sql`SELECT ${GLOBAL_COLS} FROM global_customers WHERE whatsapp = ${validated} LIMIT 1`
   );
   const row = rows<GlobalCustomerRow>(result)[0];
   if (row) return { found: true, customer: toGlobal(row) };
@@ -127,14 +127,12 @@ export async function createGlobalCustomer(
   const result = await db.execute<GlobalCustomerRow>(
     sql`INSERT INTO global_customers (whatsapp, name, email, birth_date)
         VALUES (${data.whatsapp}, ${data.name}, ${data.email ?? null}, ${toDateColumn(data.birthDate)})
-        RETURNING ${GLOBAL_COLUMNS}`
+        RETURNING ${GLOBAL_COLS}`
   );
   return toGlobal(rows<GlobalCustomerRow>(result)[0]);
 }
 
-// ---------------------------------------------------------------------------
-// Clientes LOCAIS — isolados no schema do tenant (Regra #1)
-// ---------------------------------------------------------------------------
+// --- Clientes LOCAIS (escopo de arena) --------------------------------------
 
 export async function createCustomerInTenant(
   ctx: TenantContext,
@@ -147,13 +145,13 @@ export async function createCustomerInTenant(
     createdByUserId: string;
   }
 ): Promise<LocalCustomer> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<LocalCustomerRow>(
-    sql`INSERT INTO ${tenantTable(ctx.schemaName, "customers")}
-          (global_customer_id, whatsapp, name, email, birth_date, created_by_user_id)
-        VALUES (${input.globalCustomerId ?? null}, ${input.whatsapp}, ${input.name},
+    sql`INSERT INTO customers
+          (tenant_id, global_customer_id, whatsapp, name, email, birth_date, created_by_user_id)
+        VALUES (${ctx.tenantId}, ${input.globalCustomerId ?? null}, ${input.whatsapp}, ${input.name},
                 ${input.email ?? null}, ${toDateColumn(input.birthDate)}, ${input.createdByUserId})
-        RETURNING ${LOCAL_COLUMNS}`
+        RETURNING ${LOCAL_COLS}`
   );
   return toLocal(rows<LocalCustomerRow>(result)[0]);
 }
@@ -162,9 +160,9 @@ export async function getCustomerById(
   ctx: TenantContext,
   customerId: string
 ): Promise<LocalCustomer | null> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<LocalCustomerRow>(
-    sql`SELECT ${LOCAL_COLUMNS} FROM ${tenantTable(ctx.schemaName, "customers")} WHERE id = ${customerId} LIMIT 1`
+    sql`SELECT ${LOCAL_COLS} FROM customers WHERE id = ${customerId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
   );
   const row = rows<LocalCustomerRow>(result)[0];
   return row ? toLocal(row) : null;
@@ -174,23 +172,23 @@ export async function searchCustomersForPdv(
   ctx: TenantContext,
   query: string
 ): Promise<LocalCustomer[]> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   if (!query || query.length < 2) return [];
-
-  const where = query.startsWith("+")
+  const match = query.startsWith("+")
     ? sql`whatsapp = ${query}`
     : sql`name ILIKE ${"%" + query + "%"}`;
 
   const result = await ctx.db.execute<LocalCustomerRow>(
-    sql`SELECT ${LOCAL_COLUMNS} FROM ${tenantTable(ctx.schemaName, "customers")} WHERE ${where} LIMIT 10`
+    sql`SELECT ${LOCAL_COLS} FROM customers
+        WHERE tenant_id = ${ctx.tenantId} AND ${match} LIMIT 10`
   );
   return rows<LocalCustomerRow>(result).map(toLocal);
 }
 
 export async function getCustomersByTenant(ctx: TenantContext): Promise<LocalCustomer[]> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<LocalCustomerRow>(
-    sql`SELECT ${LOCAL_COLUMNS} FROM ${tenantTable(ctx.schemaName, "customers")} ORDER BY name ASC`
+    sql`SELECT ${LOCAL_COLS} FROM customers WHERE tenant_id = ${ctx.tenantId} ORDER BY name ASC`
   );
   return rows<LocalCustomerRow>(result).map(toLocal);
 }
@@ -198,10 +196,9 @@ export async function getCustomersByTenant(ctx: TenantContext): Promise<LocalCus
 export async function updateCustomer(
   ctx: TenantContext,
   customerId: string,
-  updates: Partial<Omit<LocalCustomer, "id" | "createdAt" | "createdByUserId">>
+  updates: Partial<Omit<LocalCustomer, "id" | "tenantId" | "createdAt" | "createdByUserId">>
 ): Promise<void> {
-  assertSchema(ctx.schemaName);
-
+  assertTenantId(ctx.tenantId);
   const sets: ReturnType<typeof sql>[] = [];
   if (updates.globalCustomerId !== undefined) sets.push(sql`global_customer_id = ${updates.globalCustomerId}`);
   if (updates.whatsapp !== undefined) sets.push(sql`whatsapp = ${updates.whatsapp}`);
@@ -212,8 +209,7 @@ export async function updateCustomer(
   sets.push(sql`updated_at = now()`);
 
   await ctx.db.execute(
-    sql`UPDATE ${tenantTable(ctx.schemaName, "customers")}
-        SET ${sql.join(sets, sql`, `)}
-        WHERE id = ${customerId}`
+    sql`UPDATE customers SET ${sql.join(sets, sql`, `)}
+        WHERE id = ${customerId} AND tenant_id = ${ctx.tenantId}`
   );
 }

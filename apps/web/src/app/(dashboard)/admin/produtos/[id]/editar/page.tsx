@@ -10,7 +10,7 @@ export default async function EditarProdutoPage({ params }: { params: { id: stri
   if (!session?.user) redirect("/login");
   if (!["admin", "gerente"].includes(session.user.role ?? "")) redirect("/dashboard");
 
-  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
   const product = await getProductById(params.id, ctx);
   if (!product) redirect("/admin/produtos");
 

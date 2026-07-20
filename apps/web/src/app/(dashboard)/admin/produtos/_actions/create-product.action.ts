@@ -34,7 +34,7 @@ export async function createProductAction(_prev: CreateProductState, formData: F
   if (!parsed.success) return { status: "error", message: "Dados inválidos", fieldErrors: parsed.error.flatten().fieldErrors };
 
   try {
-    const ctx = { db, schemaName: `tenant_${s.user.tenantSlug}`, actorUserId: s.user.id };
+    const ctx = { db, tenantId: s.user.tenantId, actorUserId: s.user.id };
     const p = await createProduct(parsed.data, ctx);
     return { status: "success", productId: p.id };
   } catch (e) {

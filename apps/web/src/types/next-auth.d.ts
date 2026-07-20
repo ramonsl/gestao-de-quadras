@@ -10,6 +10,8 @@ declare module "next-auth" {
     user: {
       id: string;
       role: string;
+      /** UUID da arena (public.tenants.id) — usado no filtro row-level. */
+      tenantId: string;
       tenantSlug: string;
       username: string;
       modulesAllowed: string[];
@@ -30,6 +32,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     userId: string;
     role: string;
+    tenantId: string;
     tenantSlug: string;
     username: string;
     modulesAllowed: string[];

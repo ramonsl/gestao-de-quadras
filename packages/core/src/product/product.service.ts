@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import type { Product } from "@gestao-de-quadras/db/schema";
-import { assertSchema, rows, tenantTable, type TenantContext } from "../db/tenant";
+import { assertTenantId, rows, type TenantContext } from "../db/tenant";
 
 export const createProductInput = z.object({
   name: z.string().min(1).max(255),
@@ -16,6 +16,7 @@ export const updateProductInput = createProductInput.partial();
 
 type ProductRow = {
   id: string;
+  tenant_id: string;
   name: string;
   barcode: string | null;
   sale_price_cents: number;
@@ -26,11 +27,12 @@ type ProductRow = {
   updated_at: Date;
 };
 
-const PRODUCT_COLUMNS = sql`id, name, barcode, sale_price_cents, category, current_stock, min_stock, created_at, updated_at`;
+const COLS = sql`id, tenant_id, name, barcode, sale_price_cents, category, current_stock, min_stock, created_at, updated_at`;
 
 function toProduct(row: ProductRow): Product {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     name: row.name,
     barcode: row.barcode,
     salePriceCents: row.sale_price_cents,
@@ -49,8 +51,8 @@ async function writeAudit(
 ): Promise<void> {
   if (!ctx.actorUserId) return;
   await ctx.db.execute(
-    sql`INSERT INTO ${tenantTable(ctx.schemaName, "audit_logs")} (user_id, action, details)
-        VALUES (${ctx.actorUserId}, ${action}, ${JSON.stringify(details)})`
+    sql`INSERT INTO audit_logs (tenant_id, user_id, action, details)
+        VALUES (${ctx.tenantId}, ${ctx.actorUserId}, ${action}, ${JSON.stringify(details)})`
   );
 }
 
@@ -58,15 +60,13 @@ export async function createProduct(
   input: z.infer<typeof createProductInput>,
   ctx: TenantContext
 ): Promise<Product> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const data = createProductInput.parse(input);
-
   const result = await ctx.db.execute<ProductRow>(
-    sql`INSERT INTO ${tenantTable(ctx.schemaName, "products")}
-          (name, barcode, sale_price_cents, category, current_stock, min_stock)
-        VALUES (${data.name}, ${data.barcode ?? null}, ${data.salePriceCents},
+    sql`INSERT INTO products (tenant_id, name, barcode, sale_price_cents, category, current_stock, min_stock)
+        VALUES (${ctx.tenantId}, ${data.name}, ${data.barcode ?? null}, ${data.salePriceCents},
                 ${data.category}, ${data.currentStock}, ${data.minStock})
-        RETURNING ${PRODUCT_COLUMNS}`
+        RETURNING ${COLS}`
   );
   const product = toProduct(rows<ProductRow>(result)[0]);
   await writeAudit(ctx, "product:created", { productId: product.id, ...data });
@@ -78,9 +78,8 @@ export async function updateProduct(
   input: z.infer<typeof updateProductInput>,
   ctx: TenantContext
 ): Promise<Product | null> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const data = updateProductInput.parse(input);
-
   const sets: ReturnType<typeof sql>[] = [];
   if (data.name !== undefined) sets.push(sql`name = ${data.name}`);
   if (data.barcode !== undefined) sets.push(sql`barcode = ${data.barcode}`);
@@ -91,10 +90,9 @@ export async function updateProduct(
   sets.push(sql`updated_at = now()`);
 
   const result = await ctx.db.execute<ProductRow>(
-    sql`UPDATE ${tenantTable(ctx.schemaName, "products")}
-        SET ${sql.join(sets, sql`, `)}
-        WHERE id = ${id}
-        RETURNING ${PRODUCT_COLUMNS}`
+    sql`UPDATE products SET ${sql.join(sets, sql`, `)}
+        WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        RETURNING ${COLS}`
   );
   const row = rows<ProductRow>(result)[0];
   if (!row) return null;
@@ -103,9 +101,9 @@ export async function updateProduct(
 }
 
 export async function getProductById(id: string, ctx: TenantContext): Promise<Product | null> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<ProductRow>(
-    sql`SELECT ${PRODUCT_COLUMNS} FROM ${tenantTable(ctx.schemaName, "products")} WHERE id = ${id} LIMIT 1`
+    sql`SELECT ${COLS} FROM products WHERE id = ${id} AND tenant_id = ${ctx.tenantId} LIMIT 1`
   );
   const row = rows<ProductRow>(result)[0];
   return row ? toProduct(row) : null;
@@ -115,31 +113,30 @@ export async function listProducts(
   filters: { category?: string; searchTerm?: string } | undefined,
   ctx: TenantContext
 ): Promise<Product[]> {
-  assertSchema(ctx.schemaName);
-  const conditions: ReturnType<typeof sql>[] = [];
+  assertTenantId(ctx.tenantId);
+  const conditions: ReturnType<typeof sql>[] = [sql`tenant_id = ${ctx.tenantId}`];
   if (filters?.category) conditions.push(sql`category = ${filters.category}`);
   if (filters?.searchTerm) conditions.push(sql`name ILIKE ${"%" + filters.searchTerm + "%"}`);
-  const where = conditions.length ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
 
   const result = await ctx.db.execute<ProductRow>(
-    sql`SELECT ${PRODUCT_COLUMNS} FROM ${tenantTable(ctx.schemaName, "products")} ${where} ORDER BY name ASC`
+    sql`SELECT ${COLS} FROM products WHERE ${sql.join(conditions, sql` AND `)} ORDER BY name ASC`
   );
   return rows<ProductRow>(result).map(toProduct);
 }
 
 export async function getProductsWithLowStock(ctx: TenantContext): Promise<Product[]> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<ProductRow>(
-    sql`SELECT ${PRODUCT_COLUMNS} FROM ${tenantTable(ctx.schemaName, "products")}
-        WHERE current_stock <= min_stock ORDER BY name ASC`
+    sql`SELECT ${COLS} FROM products
+        WHERE tenant_id = ${ctx.tenantId} AND current_stock <= min_stock ORDER BY name ASC`
   );
   return rows<ProductRow>(result).map(toProduct);
 }
 
 export async function deleteProduct(id: string, ctx: TenantContext): Promise<boolean> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<{ id: string }>(
-    sql`DELETE FROM ${tenantTable(ctx.schemaName, "products")} WHERE id = ${id} RETURNING id`
+    sql`DELETE FROM products WHERE id = ${id} AND tenant_id = ${ctx.tenantId} RETURNING id`
   );
   const deleted = rows<{ id: string }>(result).length > 0;
   if (deleted) await writeAudit(ctx, "product:deleted", { productId: id });
@@ -152,31 +149,27 @@ export async function debitStock(
   reason: string,
   ctx: TenantContext
 ): Promise<{ success: boolean; newStock?: number; reason?: string }> {
-  assertSchema(ctx.schemaName);
-
+  assertTenantId(ctx.tenantId);
   // Débito atômico: só decrementa se houver saldo suficiente.
   const updated = await ctx.db.execute<{ current_stock: number }>(
-    sql`UPDATE ${tenantTable(ctx.schemaName, "products")}
+    sql`UPDATE products
         SET current_stock = current_stock - ${qty}, updated_at = now()
-        WHERE id = ${productId} AND current_stock >= ${qty}
+        WHERE id = ${productId} AND tenant_id = ${ctx.tenantId} AND current_stock >= ${qty}
         RETURNING current_stock`
   );
-
   const row = rows<{ current_stock: number }>(updated)[0];
   if (!row) {
     const exists = await ctx.db.execute<{ id: string }>(
-      sql`SELECT id FROM ${tenantTable(ctx.schemaName, "products")} WHERE id = ${productId} LIMIT 1`
+      sql`SELECT id FROM products WHERE id = ${productId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
     );
     return {
       success: false,
       reason: rows<{ id: string }>(exists).length ? "insufficient_stock" : "product_not_found",
     };
   }
-
   await ctx.db.execute(
-    sql`INSERT INTO ${tenantTable(ctx.schemaName, "stock_movements")} (product_id, quantity_change, reason, user_id)
-        VALUES (${productId}, ${-qty}, ${reason}, ${ctx.actorUserId ?? null})`
+    sql`INSERT INTO stock_movements (tenant_id, product_id, quantity_change, reason, user_id)
+        VALUES (${ctx.tenantId}, ${productId}, ${-qty}, ${reason}, ${ctx.actorUserId ?? null})`
   );
-
   return { success: true, newStock: row.current_stock };
 }

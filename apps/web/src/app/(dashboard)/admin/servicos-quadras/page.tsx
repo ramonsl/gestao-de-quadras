@@ -30,7 +30,7 @@ export default async function ServicosQuadrasPage() {
     redirect("/dashboard");
   }
 
-  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
   const courts = await getCourtsByTenant(ctx);
 
   const servicesMap = new Map<string, CourtService[]>();

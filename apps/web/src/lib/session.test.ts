@@ -32,14 +32,19 @@ vi.mock("@gestao-de-quadras/db", () => ({ db: { __fake: true } }));
 
 const { requireAdmin, requireSession } = await import("./session");
 
+const TENANT_ID = "22222222-2222-4222-8222-222222222222";
+
 function sessionFor(role: string) {
   return {
-    user: { id: "11111111-1111-4111-8111-111111111111" },
-    tenantSlug: "arena-x",
-    username: "operador",
-    role,
-    modulesAllowed: ["pdv"],
-    mustChangePassword: false,
+    user: {
+      id: "11111111-1111-4111-8111-111111111111",
+      tenantId: TENANT_ID,
+      tenantSlug: "arena-x",
+      username: "operador",
+      role,
+      modulesAllowed: ["pdv"],
+      mustChangePassword: false,
+    },
   };
 }
 
@@ -78,7 +83,7 @@ describe("requireAdmin — AC2: gestão de usuários é exclusiva do Admin", () 
     const { session, ctx } = await requireAdmin();
 
     expect(session.role).toBe("admin");
-    expect(ctx.schemaName).toBe("tenant_arena-x");
+    expect(ctx.tenantId).toBe(TENANT_ID);
     expect(ctx.actorUserId).toBe("11111111-1111-4111-8111-111111111111");
   });
 

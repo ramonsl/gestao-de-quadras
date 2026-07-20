@@ -16,7 +16,7 @@ const mkDb = (returnedRows: unknown[]) =>
 
 /** Contexto de tenant com um schema válido. */
 const mkCtx = (returnedRows: unknown[]) =>
-  ({ db: mkDb(returnedRows), schemaName: "tenant_arena-x" }) as any;
+  ({ db: mkDb(returnedRows), tenantId: "11111111-1111-1111-1111-111111111111" }) as any;
 
 describe("Customer Service", () => {
   describe("WhatsappSchema Validation", () => {

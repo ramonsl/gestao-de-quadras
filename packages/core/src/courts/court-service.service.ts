@@ -1,11 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { CourtService } from "@gestao-de-quadras/db/schema";
-import { assertSchema, rows, tenantTable, type TenantContext } from "../db/tenant";
-
-/**
- * Serviços de quadra (CAD-03): locação, aula avulsa, pacote.
- * `basePriceInCents` já chega em centavos (integer).
- */
+import { assertTenantId, rows, type TenantContext } from "../db/tenant";
 
 export interface CreateCourtServiceInput {
   courtId: string;
@@ -15,6 +10,7 @@ export interface CreateCourtServiceInput {
 
 type CourtServiceRow = {
   id: string;
+  tenant_id: string;
   court_id: string;
   service_type: string;
   base_price_in_cents: number;
@@ -22,11 +18,12 @@ type CourtServiceRow = {
   updated_at: Date;
 };
 
-const COLUMNS = sql`id, court_id, service_type, base_price_in_cents, created_at, updated_at`;
+const COLS = sql`id, tenant_id, court_id, service_type, base_price_in_cents, created_at, updated_at`;
 
 function toCourtService(row: CourtServiceRow): CourtService {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     courtId: row.court_id,
     serviceType: row.service_type,
     basePriceInCents: row.base_price_in_cents,
@@ -39,10 +36,10 @@ export async function getCourtServices(
   ctx: TenantContext,
   courtId: string
 ): Promise<CourtService[]> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<CourtServiceRow>(
-    sql`SELECT ${COLUMNS} FROM ${tenantTable(ctx.schemaName, "court_services")}
-        WHERE court_id = ${courtId}`
+    sql`SELECT ${COLS} FROM court_services
+        WHERE tenant_id = ${ctx.tenantId} AND court_id = ${courtId}`
   );
   return rows<CourtServiceRow>(result).map(toCourtService);
 }
@@ -51,12 +48,11 @@ export async function createCourtService(
   ctx: TenantContext,
   input: CreateCourtServiceInput
 ): Promise<CourtService> {
-  assertSchema(ctx.schemaName);
+  assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<CourtServiceRow>(
-    sql`INSERT INTO ${tenantTable(ctx.schemaName, "court_services")}
-          (court_id, service_type, base_price_in_cents)
-        VALUES (${input.courtId}, ${input.serviceType}, ${input.basePriceInCents})
-        RETURNING ${COLUMNS}`
+    sql`INSERT INTO court_services (tenant_id, court_id, service_type, base_price_in_cents)
+        VALUES (${ctx.tenantId}, ${input.courtId}, ${input.serviceType}, ${input.basePriceInCents})
+        RETURNING ${COLS}`
   );
   return toCourtService(rows<CourtServiceRow>(result)[0]);
 }

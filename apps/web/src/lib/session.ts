@@ -6,6 +6,8 @@ import { db } from "@gestao-de-quadras/db";
 export interface ArenaSession {
   userId: string;
   username: string;
+  /** UUID da arena (public.tenants.id). */
+  tenantId: string;
   tenantSlug: string;
   role: "admin" | "gerente" | "atendente";
   modulesAllowed: string[];
@@ -16,10 +18,11 @@ export interface ArenaSession {
 export async function getArenaSession(): Promise<ArenaSession | null> {
   const session = await auth();
   const u = session?.user;
-  if (!u?.tenantSlug || !u?.role) return null;
+  if (!u?.tenantId || !u?.role) return null;
   return {
     userId: u.id,
     username: u.username ?? "",
+    tenantId: u.tenantId,
     tenantSlug: u.tenantSlug,
     role: u.role as ArenaSession["role"],
     modulesAllowed: u.modulesAllowed ?? [],
@@ -27,8 +30,12 @@ export async function getArenaSession(): Promise<ArenaSession | null> {
   };
 }
 
+function contextFor(session: ArenaSession): ArenaUserContext {
+  return { db, tenantId: session.tenantId, actorUserId: session.userId };
+}
+
 /**
- * Retorna a sessão + o contexto de tenant pronto para o core (SQL cru), sem
+ * Retorna a sessão + o contexto de tenant (row-level) pronto para o core, sem
  * redirecionar. Para uso em server actions que devolvem erro em vez de navegar.
  */
 export async function getArenaContext(): Promise<
@@ -36,14 +43,7 @@ export async function getArenaContext(): Promise<
 > {
   const session = await getArenaSession();
   if (!session) return null;
-  return {
-    session,
-    ctx: {
-      db,
-      schemaName: `tenant_${session.tenantSlug}`,
-      actorUserId: session.userId,
-    },
-  };
+  return { session, ctx: contextFor(session) };
 }
 
 /**
@@ -57,11 +57,7 @@ export async function requireSession(): Promise<ArenaSession> {
   const session = await getArenaSession();
   if (!session) redirect("/login");
 
-  const current = await getArenaUser(
-    { db, schemaName: `tenant_${session.tenantSlug}`, actorUserId: session.userId },
-    session.userId
-  );
-
+  const current = await getArenaUser(contextFor(session), session.userId);
   if (!current || current.status !== "active") redirect("/login");
 
   // O perfil/módulos vigentes no banco prevalecem sobre os do token
@@ -75,12 +71,5 @@ export async function requireSession(): Promise<ArenaSession> {
 export async function requireAdmin(): Promise<{ session: ArenaSession; ctx: ArenaUserContext }> {
   const session = await requireSession();
   if (session.role !== "admin") redirect("/usuarios/negado");
-  return {
-    session,
-    ctx: {
-      db,
-      schemaName: `tenant_${session.tenantSlug}`,
-      actorUserId: session.userId,
-    },
-  };
+  return { session, ctx: contextFor(session) };
 }

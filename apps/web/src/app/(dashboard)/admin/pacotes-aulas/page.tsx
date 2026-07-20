@@ -22,7 +22,7 @@ export default async function PacotesAulasPage() {
     redirect("/dashboard");
   }
 
-  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
   const packages = await getClassPackages(ctx);
 
   return (

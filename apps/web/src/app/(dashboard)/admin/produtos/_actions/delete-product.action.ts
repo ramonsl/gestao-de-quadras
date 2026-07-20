@@ -15,7 +15,7 @@ export async function deleteProductAction(productId: string) {
   }
 
   try {
-    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
     const deleted = await deleteProduct(productId, ctx);
     if (!deleted) return { status: "error", message: "Produto não encontrado" };
     return { status: "success" };

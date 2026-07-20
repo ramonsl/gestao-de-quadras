@@ -1,14 +1,13 @@
-import { sql, type SQL } from "drizzle-orm";
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import type * as schema from "@gestao-de-quadras/db/schema";
 
 /**
- * Padrão MANDATÓRIO de isolamento de tenant (ver "Regra inviolável #1" do
- * CLAUDE.md): schema-por-tenant via SQL parametrizado que qualifica
- * explicitamente o schema do tenant com `sql.identifier`.
+ * Isolamento de tenant — DISCRIMINADOR POR LINHA (ver Regra inviolável #1).
  *
- * NUNCA usar tabelas Drizzle qualificadas em `tenant_template` para runtime —
- * o SQL gerado fixaria o schema e vazaria dados entre arenas.
+ * Toda tabela de arena carrega `tenant_id`. Os serviços recebem o `TenantContext`
+ * e SEMPRE filtram/gravam `tenant_id` explicitamente — este é o mecanismo de
+ * isolamento. RLS do Postgres está previsto como reforço (hardening) num passo
+ * dedicado; quando entrar, o ponto de acesso continua sendo este contexto.
  */
 
 /** Conexão Drizzle compartilhada (expõe `.execute` para SQL parametrizado). */
@@ -16,24 +15,20 @@ export type ArenaDb = NeonHttpDatabase<typeof schema>;
 
 export interface TenantContext {
   db: ArenaDb;
-  /** Nome físico do schema do tenant, ex.: `tenant_arena-x`. */
-  schemaName: string;
+  /** UUID da arena (public.tenants.id). */
+  tenantId: string;
   /** users_tenants.id do operador que executa a ação (auditoria). */
   actorUserId?: string;
 }
 
-const SCHEMA_PATTERN = /^tenant_[a-z0-9-]+$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Valida o nome do schema antes de entrar no SQL (barra injeção). */
-export function assertSchema(schemaName: string): void {
-  if (!SCHEMA_PATTERN.test(schemaName)) {
-    throw new Error(`Nome de schema de tenant inválido: "${schemaName}".`);
+/** Valida o tenantId antes de entrar no SQL (barra injeção / id malformado). */
+export function assertTenantId(tenantId: string): void {
+  if (!UUID_PATTERN.test(tenantId)) {
+    throw new Error(`tenant_id inválido: "${tenantId}".`);
   }
-}
-
-/** Referência qualificada `"tenant_<slug>"."<table>"` para interpolar no SQL. */
-export function tenantTable(schemaName: string, table: string): SQL {
-  return sql`${sql.identifier(schemaName)}.${sql.identifier(table)}`;
 }
 
 /** Extrai as linhas tipadas do resultado de `db.execute`. */

@@ -5,7 +5,7 @@ const ctx = (rowSets: unknown[][]) => {
   let i = 0;
   return {
     db: { execute: async () => ({ rows: rowSets[i++] ?? [] }) },
-    schemaName: "tenant_arena-x",
+    tenantId: "11111111-1111-1111-1111-111111111111",
     actorUserId: "user-1",
   } as any;
 };
@@ -21,9 +21,9 @@ const serviceRow = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("Court Service (serviços)", () => {
-  it("rejeita schema de tenant inválido", async () => {
-    await expect(getCourtServices({ db: {}, schemaName: "x" } as any, "c1")).rejects.toThrow(
-      /schema de tenant inválido/i
+  it("rejeita tenant_id inválido", async () => {
+    await expect(getCourtServices({ db: {}, tenantId: "x" } as any, "c1")).rejects.toThrow(
+      /tenant_id inválido/i
     );
   });
 

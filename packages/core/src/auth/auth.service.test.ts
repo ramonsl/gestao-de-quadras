@@ -1,215 +1,252 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import {
   validateCredentials,
   createActivationToken,
   activateAccount,
   createPasswordResetToken,
   resetPassword,
-  type AuthDb,
 } from "./auth.service";
+import { sqlText, sqlParams, type RecordedCall } from "../test/sql-mock";
 
 // ---------------------------------------------------------------------------
-// Tempos fake para testes de expiração
+// Tempos fake para testes de expiração de token
 // ---------------------------------------------------------------------------
 
-const NOW = new Date("2025-01-01T12:00:00Z");
+const NOW = new Date("2026-01-01T12:00:00Z");
 const FUTURE = new Date(NOW.getTime() + 1000 * 60 * 60 * 24); // +24h
-const PAST = new Date(NOW.getTime() - 1000 * 60 * 60 * 24);   // -24h
+const PAST = new Date(NOW.getTime() - 1000 * 60 * 60 * 24); // -24h
 
 vi.useFakeTimers();
 vi.setSystemTime(NOW);
+afterAll(() => vi.useRealTimers());
 
 // ---------------------------------------------------------------------------
 // Mocks de módulos externos
 // ---------------------------------------------------------------------------
 
 vi.mock("@node-rs/argon2", () => ({
-  hash: vi.fn().mockResolvedValue("hashed_new_password"),
+  hash: vi.fn().mockResolvedValue("argon2::hashed"),
   verify: vi.fn(),
 }));
 
-vi.mock("@gestao-de-quadras/db/schema", () => ({
-  users: { id: "id", email: "email" },
-}));
+// crypto.randomBytes é usado para os tokens — mantemos o real (gera hex de 64).
 
 // ---------------------------------------------------------------------------
-// Helpers de mock do Drizzle
+// Fake de db.execute (o serviço usa db.execute(sql`...`), não o query builder)
 // ---------------------------------------------------------------------------
 
-function buildSelectDb(rows: unknown[], rows2?: unknown[]) {
-  let callCount = 0;
-  const limit = vi.fn().mockImplementation(() => {
-    const result = callCount === 0 ? (Array.isArray(rows) ? rows : []) : (rows2 ?? rows);
-    callCount++;
-    return Promise.resolve(result);
-  });
-  const where = vi.fn().mockReturnValue({ limit });
-  const from = vi.fn().mockReturnValue({ where });
-  const select = vi.fn().mockReturnValue({ from });
-  const update = vi.fn().mockReturnValue({
-    set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
-  });
-  return { select, update } as unknown as AuthDb;
+const SCHEMA = "tenant_arena-a";
+
+function authMock(selectRow: Record<string, unknown> | null) {
+  const calls: RecordedCall[] = [];
+  const execute = async (sqlObj: unknown): Promise<{ rows: unknown[] }> => {
+    const text = sqlText(sqlObj);
+    calls.push({ text, params: sqlParams(sqlObj) });
+    if (/^\s*SELECT/i.test(text)) {
+      return { rows: selectRow ? [selectRow] : [] };
+    }
+    return { rows: [] };
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { db: { execute } as any, calls };
 }
 
+function updateCall(calls: RecordedCall[]): RecordedCall | undefined {
+  return calls.find((c) => /^\s*UPDATE/i.test(c.text));
+}
+
+function makeAuthRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "user-1",
+    username: "operador",
+    email: "operador@arena.com",
+    password_hash: "stored-hash",
+    role: "atendente",
+    modules_allowed: '["pdv","crm"]',
+    status: "active",
+    must_change_password: false,
+    activated_at: new Date("2025-06-01T00:00:00Z"),
+    activation_token_expires_at: null,
+    reset_token_expires_at: null,
+    failed_attempts: 0,
+    locked_until: null,
+    ...overrides,
+  };
+}
+
+beforeEach(() => vi.clearAllMocks());
+
 // ---------------------------------------------------------------------------
-// validateCredentials
+// AC3 / AC7 — validateCredentials (login por username OU e-mail no tenant)
 // ---------------------------------------------------------------------------
 
 describe("validateCredentials", () => {
-  const baseUser = {
-    id: "user-1",
-    email: "operador@arena.com",
-    passwordHash: "hashed",
-    activatedAt: new Date("2024-01-01"),
-    lockedUntil: null,
-    failedAttempts: 0,
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("retorna success quando credenciais estão corretas", async () => {
+  it("autentica por username e atualiza last_login_at, retornando role e módulos", async () => {
     const { verify } = await import("@node-rs/argon2");
     vi.mocked(verify).mockResolvedValue(true);
-    const db = buildSelectDb([baseUser]);
+    const { db, calls } = authMock(makeAuthRow());
 
-    const result = await validateCredentials("operador@arena.com", "senha123", db);
-    expect(result).toEqual({ success: true, userId: "user-1" });
+    const result = await validateCredentials("operador", "senhaCorreta1", SCHEMA, db);
+
+    expect(result).toEqual({
+      success: true,
+      user: {
+        id: "user-1",
+        username: "operador",
+        role: "atendente",
+        modulesAllowed: ["pdv", "crm"],
+        mustChangePassword: false,
+      },
+    });
+    // buscou por username (não por e-mail)
+    expect(calls[0].text).toMatch(/WHERE username =/);
+    // login bem-sucedido registra o último acesso
+    expect(updateCall(calls)!.text).toMatch(/last_login_at = now\(\)/);
   });
 
-  it("retorna invalid_credentials quando usuário não existe", async () => {
-    const db = buildSelectDb([]);
-    const result = await validateCredentials("inexistente@arena.com", "senha", db);
+  it("autentica por e-mail quando o identificador contém @", async () => {
+    const { verify } = await import("@node-rs/argon2");
+    vi.mocked(verify).mockResolvedValue(true);
+    const { db, calls } = authMock(makeAuthRow());
+
+    const result = await validateCredentials("operador@arena.com", "senhaCorreta1", SCHEMA, db);
+
+    expect(result.success).toBe(true);
+    expect(calls[0].text).toMatch(/WHERE email =/);
+  });
+
+  it("retorna invalid_credentials para identificador inexistente", async () => {
+    const { db } = authMock(null);
+    const result = await validateCredentials("fantasma", "x", SCHEMA, db);
     expect(result).toEqual({ success: false, reason: "invalid_credentials" });
   });
 
-  it("retorna account_inactive quando conta não foi ativada", async () => {
-    const { verify } = await import("@node-rs/argon2");
-    vi.mocked(verify).mockResolvedValue(true);
-    const db = buildSelectDb([{ ...baseUser, activatedAt: null }]);
-
-    const result = await validateCredentials("operador@arena.com", "senha123", db);
+  it("retorna account_inactive quando o status é inactive", async () => {
+    const { db } = authMock(makeAuthRow({ status: "inactive" }));
+    const result = await validateCredentials("operador", "senhaCorreta1", SCHEMA, db);
     expect(result).toEqual({ success: false, reason: "account_inactive" });
   });
 
-  it("retorna account_locked quando lockedUntil está no futuro", async () => {
-    const db = buildSelectDb([{ ...baseUser, lockedUntil: FUTURE }]);
-    const result = await validateCredentials("operador@arena.com", "senha", db);
+  it("retorna not_activated quando a conta ainda não foi ativada", async () => {
+    const { db } = authMock(makeAuthRow({ activated_at: null }));
+    const result = await validateCredentials("operador", "senhaCorreta1", SCHEMA, db);
+    expect(result).toEqual({ success: false, reason: "not_activated" });
+  });
+
+  it("retorna account_locked quando locked_until está no futuro", async () => {
+    const { db } = authMock(makeAuthRow({ locked_until: FUTURE }));
+    const result = await validateCredentials("operador", "qualquer", SCHEMA, db);
     expect(result).toEqual({ success: false, reason: "account_locked" });
   });
 
-  it("retorna invalid_credentials após senha errada (tentativas < 5)", async () => {
+  it("retorna invalid_credentials e incrementa tentativas após senha errada (< 5)", async () => {
     const { verify } = await import("@node-rs/argon2");
     vi.mocked(verify).mockResolvedValue(false);
-    const db = buildSelectDb([{ ...baseUser, failedAttempts: 2 }]);
+    const { db, calls } = authMock(makeAuthRow({ failed_attempts: 2 }));
 
-    const result = await validateCredentials("operador@arena.com", "errada", db);
+    const result = await validateCredentials("operador", "errada", SCHEMA, db);
+
     expect(result).toEqual({ success: false, reason: "invalid_credentials" });
+    const update = updateCall(calls)!;
+    expect(update.text).toMatch(/failed_attempts =/);
+    expect(update.params).toContain(3); // 2 -> 3
   });
 
-  it("bloqueia a conta após 5 tentativas falhas", async () => {
+  it("bloqueia a conta após a 5ª tentativa falha (account_locked)", async () => {
     const { verify } = await import("@node-rs/argon2");
     vi.mocked(verify).mockResolvedValue(false);
+    const { db, calls } = authMock(makeAuthRow({ failed_attempts: 4 }));
 
-    const mockSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-    const mockUpdate = vi.fn().mockReturnValue({ set: mockSet });
-    const limit = vi.fn().mockResolvedValue([{ ...baseUser, failedAttempts: 4 }]);
-    const where = vi.fn().mockReturnValue({ limit });
-    const from = vi.fn().mockReturnValue({ where });
-    const select = vi.fn().mockReturnValue({ from });
-    const db = { select, update: mockUpdate } as unknown as AuthDb;
-
-    const result = await validateCredentials("operador@arena.com", "errada", db);
+    const result = await validateCredentials("operador", "errada", SCHEMA, db);
 
     expect(result).toEqual({ success: false, reason: "account_locked" });
-    expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({ failedAttempts: 5, lockedUntil: expect.any(Date) })
-    );
+    const update = updateCall(calls)!;
+    expect(update.params).toContain(5); // 4 -> 5
+    // grava um locked_until na 5ª falha
+    expect(update.text).toMatch(/locked_until =/);
+  });
+
+  it("rejeita o schema fora do padrão tenant_* (defesa contra injeção)", async () => {
+    const { db } = authMock(makeAuthRow());
+    await expect(validateCredentials("operador", "x", "public", db)).rejects.toThrow();
   });
 });
 
 // ---------------------------------------------------------------------------
-// activateAccount
+// Ativação de conta (fluxo por e-mail) — agora com schemaName
 // ---------------------------------------------------------------------------
+
+describe("createActivationToken", () => {
+  it("gera token hex de 64 chars e persiste no schema do tenant", async () => {
+    const { db, calls } = authMock(null);
+    const token = await createActivationToken("user-1", SCHEMA, db);
+
+    expect(token).toHaveLength(64);
+    const update = updateCall(calls)!;
+    expect(update.text).toMatch(/activation_token =/);
+    expect(update.text).toContain(`${SCHEMA}.users_tenants`);
+  });
+});
 
 describe("activateAccount", () => {
-  const validToken = "valid-token-abc123";
-
-  beforeEach(() => vi.clearAllMocks());
-
-  it("ativa a conta com token válido", async () => {
-    const db = buildSelectDb(
-      [{ id: "user-1", activationToken: validToken, activationTokenExpiresAt: FUTURE }],
-      []
-    );
-    const result = await activateAccount(validToken, "novaSenha123!", db);
+  it("ativa a conta com token válido (dentro do prazo)", async () => {
+    const { db } = authMock({ id: "user-1", activation_token_expires_at: FUTURE });
+    const result = await activateAccount("token-abc", "novaSenhaSegura1", SCHEMA, db);
     expect(result).toEqual({ success: true });
   });
 
-  it("retorna token_expired quando expirado", async () => {
-    const db = buildSelectDb(
-      [],
-      [{ activationTokenExpiresAt: PAST }]
-    );
-    const result = await activateAccount(validToken, "novaSenha", db);
+  it("retorna token_expired quando o token expirou", async () => {
+    const { db } = authMock({ id: "user-1", activation_token_expires_at: PAST });
+    const result = await activateAccount("token-abc", "novaSenhaSegura1", SCHEMA, db);
     expect(result).toEqual({ success: false, reason: "token_expired" });
   });
 
   it("retorna token_not_found para token inexistente", async () => {
-    const db = buildSelectDb([], []);
-    const result = await activateAccount("token-invalido", "novaSenha", db);
+    const { db } = authMock(null);
+    const result = await activateAccount("token-invalido", "novaSenhaSegura1", SCHEMA, db);
     expect(result).toEqual({ success: false, reason: "token_not_found" });
   });
 });
 
 // ---------------------------------------------------------------------------
-// resetPassword
-// ---------------------------------------------------------------------------
-
-describe("resetPassword", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("redefine a senha com token válido", async () => {
-    const db = buildSelectDb(
-      [{ id: "user-1", resetToken: "token", resetTokenExpiresAt: FUTURE }],
-      []
-    );
-    const result = await resetPassword("token", "novaSenha123!", db);
-    expect(result).toEqual({ success: true });
-  });
-
-  it("retorna token_expired para token vencido", async () => {
-    const db = buildSelectDb([], [{ resetTokenExpiresAt: PAST }]);
-    const result = await resetPassword("token", "novaSenha", db);
-    expect(result).toEqual({ success: false, reason: "token_expired" });
-  });
-
-  it("retorna token_not_found para token inexistente", async () => {
-    const db = buildSelectDb([], []);
-    const result = await resetPassword("invalido", "novaSenha", db);
-    expect(result).toEqual({ success: false, reason: "token_not_found" });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// createPasswordResetToken
+// Recuperação de senha por e-mail — agora com schemaName
 // ---------------------------------------------------------------------------
 
 describe("createPasswordResetToken", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("retorna null para e-mail inexistente", async () => {
-    const db = buildSelectDb([]);
-    const result = await createPasswordResetToken("inexistente@arena.com", db);
-    expect(result).toBeNull();
+  it("retorna null para e-mail inexistente (não revela existência)", async () => {
+    const { db } = authMock(null);
+    expect(await createPasswordResetToken("ninguem@arena.com", SCHEMA, db)).toBeNull();
   });
 
-  it("retorna token hexadecimal para e-mail válido", async () => {
-    const db = buildSelectDb([{ id: "user-1" }]);
-    const result = await createPasswordResetToken("operador@arena.com", db);
-    expect(result).toBeTypeOf("string");
-    expect(result).toHaveLength(64); // 32 bytes em hex
+  it("retorna token hex de 64 chars para e-mail existente", async () => {
+    const { db } = authMock({ id: "user-1" });
+    const token = await createPasswordResetToken("operador@arena.com", SCHEMA, db);
+    expect(token).toHaveLength(64);
+  });
+});
+
+describe("resetPassword", () => {
+  it("redefine a senha com token válido e zera lockout", async () => {
+    const { db, calls } = authMock({ id: "user-1", reset_token_expires_at: FUTURE });
+    const result = await resetPassword("reset-token", "novaSenhaSegura1", SCHEMA, db);
+
+    expect(result).toEqual({ success: true });
+    expect(updateCall(calls)!.text).toMatch(/failed_attempts = 0/);
+  });
+
+  it("retorna token_expired quando o token expirou", async () => {
+    const { db } = authMock({ id: "user-1", reset_token_expires_at: PAST });
+    expect(await resetPassword("reset-token", "novaSenhaSegura1", SCHEMA, db)).toEqual({
+      success: false,
+      reason: "token_expired",
+    });
+  });
+
+  it("retorna token_not_found para token inexistente", async () => {
+    const { db } = authMock(null);
+    expect(await resetPassword("invalido", "novaSenhaSegura1", SCHEMA, db)).toEqual({
+      success: false,
+      reason: "token_not_found",
+    });
   });
 });

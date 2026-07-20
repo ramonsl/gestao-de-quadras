@@ -3,21 +3,23 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import { db } from "@gestao-de-quadras/db";
 import { validateCredentials } from "@gestao-de-quadras/core/auth/auth.service";
-import { sql } from "drizzle-orm";
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  /** username OU e-mail — o operador pode não ter e-mail (SAAS-12) */
+  identifier: z.string().min(1),
   password: z.string().min(1),
   tenantSlug: z.string().min(1),
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  // Jornada operacional de um turno; o status do operador ainda é revalidado
+  // no banco a cada requisição protegida (ver lib/session.ts).
+  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
 
   providers: [
     Credentials({
       credentials: {
-        email: { label: "E-mail", type: "email" },
+        identifier: { label: "Usuário ou e-mail", type: "text" },
         password: { label: "Senha", type: "password" },
         tenantSlug: { label: "Tenant Slug", type: "text" },
       },
@@ -26,42 +28,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        const { email, password, tenantSlug } = parsed.data;
+        const { identifier, password, tenantSlug } = parsed.data;
 
-        // Valida credenciais no schema público
-        const result = await validateCredentials(email, password, db);
+        // Operador é entidade do tenant — autentica no schema da arena (SAAS-12)
+        const schemaName = `tenant_${tenantSlug}`;
+        const result = await validateCredentials(identifier, password, schemaName, db);
         if (!result.success) return null;
 
-        // Busca vínculo do usuário com o tenant no schema tenant_<slug>
-        const schemaName = `tenant_${tenantSlug}`;
-        const query = sql.raw(
-          `SELECT id, role, modules_allowed, status FROM "${schemaName}".users_tenants WHERE user_id = '${result.userId}' LIMIT 1`
-        );
-
-        const resultQuery = await db.execute<{
-          id: string;
-          role: string;
-          modules_allowed: string;
-          status: string;
-        }>(query);
-
-        const link = (resultQuery.rows as unknown as Array<{
-          id: string;
-          role: string;
-          modules_allowed: string;
-          status: string;
-        }>)[0];
-
-        if (!link || link.status !== "active") return null;
-
-        const modulesAllowed: string[] = JSON.parse(link.modules_allowed || "[]");
-
         return {
-          id: result.userId,
-          email,
+          id: result.user.id,
           tenantSlug,
-          role: link.role,
-          modulesAllowed,
+          username: result.user.username,
+          role: result.user.role,
+          modulesAllowed: result.user.modulesAllowed,
+          mustChangePassword: result.user.mustChangePassword,
         };
       },
     }),
@@ -70,19 +50,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     jwt({ token, user }) {
       if (user) {
-        token.userId = user.id;
-        token.tenantSlug = (user as unknown as { tenantSlug: string }).tenantSlug;
-        token.role = (user as unknown as { role: string }).role;
-        token.modulesAllowed = (user as unknown as { modulesAllowed: string[] }).modulesAllowed;
+        const u = user as unknown as {
+          id: string;
+          tenantSlug: string;
+          username: string;
+          role: string;
+          modulesAllowed: string[];
+          mustChangePassword: boolean;
+        };
+        token.userId = u.id;
+        token.tenantSlug = u.tenantSlug;
+        token.username = u.username;
+        token.role = u.role;
+        token.modulesAllowed = u.modulesAllowed;
+        token.mustChangePassword = u.mustChangePassword;
       }
       return token;
     },
 
     session({ session, token }) {
+      const s = session as unknown as Record<string, unknown>;
       session.user.id = token.userId as string;
-      (session as unknown as Record<string, unknown>).tenantSlug = token.tenantSlug;
-      (session as unknown as Record<string, unknown>).role = token.role;
-      (session as unknown as Record<string, unknown>).modulesAllowed = token.modulesAllowed;
+      s.tenantSlug = token.tenantSlug;
+      s.username = token.username;
+      s.role = token.role;
+      s.modulesAllowed = token.modulesAllowed;
+      s.mustChangePassword = token.mustChangePassword;
       return session;
     },
   },

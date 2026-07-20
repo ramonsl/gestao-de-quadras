@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { db } from "@gestao-de-quadras/db";
 import { activateAccount } from "@gestao-de-quadras/core/auth/auth.service";
+import { resolveTenantSlugFromHost } from "@/lib/tenant";
 
 const schema = z.object({
   token: z.string().min(1),
@@ -33,7 +34,17 @@ export async function activateAccountAction(
     return { status: "validation_error", errors: parsed.error.flatten().fieldErrors };
   }
 
-  const result = await activateAccount(parsed.data.token, parsed.data.password, db);
+  const tenantSlug = await resolveTenantSlugFromHost();
+  if (!tenantSlug) {
+    return { status: "error", message: "Arena não identificada. Verifique o endereço de acesso." };
+  }
+
+  const result = await activateAccount(
+    parsed.data.token,
+    parsed.data.password,
+    `tenant_${tenantSlug}`,
+    db
+  );
 
   if (!result.success) {
     const message =

@@ -56,7 +56,6 @@ export default function RecuperarSenhaPage() {
           </p>
 
           <form action={formAction} className="space-y-4">
-            <input type="hidden" name="tenantSlug" value={process.env.NEXT_PUBLIC_TENANT_SLUG ?? ""} />
 
             <div>
               <label htmlFor="email" className="block text-xs font-semibold text-[var(--text-2)] mb-1.5">

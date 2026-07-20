@@ -3,11 +3,11 @@
 import { signIn } from "@/auth";
 import { AuthError } from "next-auth";
 import { z } from "zod";
+import { resolveTenantSlugFromHost } from "@/lib/tenant";
 
 const loginSchema = z.object({
-  email: z.string().email("E-mail inválido."),
+  identifier: z.string().min(1, "Informe seu usuário ou e-mail."),
   password: z.string().min(1, "Informe a senha."),
-  tenantSlug: z.string().min(1),
 });
 
 export type LoginActionState =
@@ -21,9 +21,8 @@ export async function loginAction(
   formData: FormData
 ): Promise<LoginActionState> {
   const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
+    identifier: formData.get("identifier"),
     password: formData.get("password"),
-    tenantSlug: formData.get("tenantSlug"),
   });
 
   if (!parsed.success) {
@@ -33,18 +32,24 @@ export async function loginAction(
     };
   }
 
+  // O tenant vem do Host, nunca do formulário
+  const tenantSlug = await resolveTenantSlugFromHost();
+  if (!tenantSlug) {
+    return { status: "error", message: "Arena não identificada. Verifique o endereço de acesso." };
+  }
+
   try {
     await signIn("credentials", {
-      email: parsed.data.email,
+      identifier: parsed.data.identifier,
       password: parsed.data.password,
-      tenantSlug: parsed.data.tenantSlug,
-      redirectTo: "/dashboard",
+      tenantSlug,
+      redirectTo: "/usuarios",
     });
   } catch (error) {
     if (error instanceof AuthError) {
       switch (error.type) {
         case "CredentialsSignin":
-          return { status: "error", message: "E-mail ou senha incorretos. Verifique e tente novamente." };
+          return { status: "error", message: "Usuário ou senha incorretos. Verifique e tente novamente." };
         default:
           return { status: "error", message: "Erro ao autenticar. Tente novamente." };
       }

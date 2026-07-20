@@ -47,27 +47,24 @@ export default function LoginPage({
           )}
 
           <form action={formAction} className="space-y-4">
-            {/* tenantSlug enviado como campo hidden — resolução via query param em dev */}
-            <input type="hidden" name="tenantSlug" value={process.env.NEXT_PUBLIC_TENANT_SLUG ?? ""} />
-
             <div>
               <label
-                htmlFor="email"
+                htmlFor="identifier"
                 className="block text-xs font-semibold text-[var(--text-2)] mb-1.5"
               >
-                E-mail
+                Usuário ou e-mail
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="identifier"
+                name="identifier"
+                type="text"
+                autoComplete="username"
                 required
-                placeholder="operador@arena.com.br"
+                placeholder="seu.usuario"
                 className="w-full h-9 px-3 text-sm text-[var(--text-1)] bg-white border border-[var(--border)] rounded-[var(--radius-input)] outline-none transition-[border-color] duration-[180ms] placeholder:text-[var(--text-3)] focus:border-[var(--accent)]"
               />
-              {state.status === "validation_error" && state.errors.email && (
-                <p className="mt-1 text-rule text-[var(--danger)]">{state.errors.email[0]}</p>
+              {state.status === "validation_error" && state.errors.identifier && (
+                <p className="mt-1 text-rule text-[var(--danger)]">{state.errors.identifier[0]}</p>
               )}
             </div>
 

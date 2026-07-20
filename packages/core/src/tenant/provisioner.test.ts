@@ -3,12 +3,21 @@ import { provisionNewTenant } from "./provisioner";
 import { db } from "@gestao-de-quadras/db";
 import { sql } from "drizzle-orm";
 
-describe("Provisionamento de Tenants (SAAS-01)", () => {
-  const testSlug = `arena_${Date.now()}`;
-  const adminEmail = `admin_${Date.now()}@arena.com`;
+/**
+ * Teste de INTEGRAÇÃO — cria/derruba schemas físicos no Postgres, então só roda
+ * quando um banco de teste é fornecido via TEST_DATABASE_URL. Sem essa variável,
+ * a suíte é ignorada para não abrir conexão contra um banco real em `pnpm test`.
+ *
+ * Atualizado para o contrato SAAS-12 do provisioner: o operador Admin inicial é
+ * uma entidade DO tenant (adminName/adminUsername/adminPasswordHash), não mais
+ * um registro em public.users.
+ */
+const hasTestDb = Boolean(process.env.TEST_DATABASE_URL);
+
+describe.skipIf(!hasTestDb)("Provisionamento de Tenants (SAAS-01 / SAAS-12)", () => {
+  const testSlug = `arena-${Date.now()}`;
 
   beforeAll(async () => {
-    // Garante que o schema public global de teste tem as tabelas estruturadas
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "tenants" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -18,42 +27,39 @@ describe("Provisionamento de Tenants (SAAS-01)", () => {
         "created_at" timestamp DEFAULT now() NOT NULL
       );
     `);
-    
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS "users" (
-        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        "email" varchar(255) NOT NULL UNIQUE,
-        "password_hash" text NOT NULL,
-        "created_at" timestamp DEFAULT now() NOT NULL
-      );
-    `);
   });
 
-  it("deve provisionar um novo tenant com schema Postgres dedicado e admin inicial", async () => {
+  it("provisiona um tenant com schema dedicado e Admin inicial no próprio schema", async () => {
     const result = await provisionNewTenant({
       slug: testSlug,
       name: "Arena Teste Unitário",
-      adminEmail,
-      passwordHash: "fake_hash"
+      adminName: "Admin Teste",
+      adminUsername: "admin",
+      adminPasswordHash: "fake_hash",
+      adminEmail: `admin_${Date.now()}@arena.com`,
     });
 
     expect(result.tenantSlug).toBe(testSlug);
     expect(result.schemaName).toBe(`tenant_${testSlug}`);
+    expect(result.adminUserId).toBeTruthy();
 
-    // Verifica se o schema foi criado fisicamente no Postgres
     const schemaCheck = await db.execute(sql`
-      SELECT count(*)::int as n 
-      FROM information_schema.schemata 
+      SELECT count(*)::int as n
+      FROM information_schema.schemata
       WHERE schema_name = ${result.schemaName}
     `);
-    
-    // Suporta diferentes formatos de retorno do Drizzle executor
-    const rows = (schemaCheck as any).rows || schemaCheck;
+    const rows = (schemaCheck as { rows?: Array<{ n: number }> }).rows ?? (schemaCheck as unknown as Array<{ n: number }>);
     expect(rows[0].n).toBe(1);
 
-    // Limpeza de testes locais
+    // o Admin inicial vive no schema do tenant (isolamento SAAS-12)
+    const adminCheck = await db.execute(
+      sql`SELECT username, role FROM ${sql.identifier(result.schemaName)}.${sql.identifier("users_tenants")} WHERE id = ${result.adminUserId}`
+    );
+    const adminRows = (adminCheck as { rows?: Array<{ username: string; role: string }> }).rows ?? [];
+    expect(adminRows[0]).toMatchObject({ username: "admin", role: "admin" });
+
+    // limpeza
     await db.execute(sql.raw(`DROP SCHEMA IF EXISTS "${result.schemaName}" CASCADE`));
     await db.execute(sql`DELETE FROM "tenants" WHERE slug = ${testSlug}`);
-    await db.execute(sql`DELETE FROM "users" WHERE id = ${result.adminUserId}`);
   });
 });

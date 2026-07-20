@@ -96,41 +96,6 @@ export function LandingHero() {
               Ver Grade em Tempo Real
             </a>
           </div>
-
-          {/* Social Proof Metric Counters */}
-          <div className="pt-12 grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
-            <div className="bg-white p-4 rounded-[var(--radius-card)] border border-[var(--border)] shadow-xs">
-              <span className="text-kpi text-[var(--accent)] block">+120</span>
-              <span className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wide">
-                Arenas Ativas
-              </span>
-              <p className="text-rule mt-1">Multi-modalidades esportivas</p>
-            </div>
-
-            <div className="bg-white p-4 rounded-[var(--radius-card)] border border-[var(--border)] shadow-xs">
-              <span className="text-kpi text-[var(--text-1)] block">99.8%</span>
-              <span className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wide">
-                Taxa de Ocupação
-              </span>
-              <p className="text-rule mt-1">Em horários nobres das 18h às 23h</p>
-            </div>
-
-            <div className="bg-white p-4 rounded-[var(--radius-card)] border border-[var(--border)] shadow-xs">
-              <span className="text-kpi text-[var(--accent)] block">3.2x</span>
-              <span className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wide">
-                Vendas no Bar/PDV
-              </span>
-              <p className="text-rule mt-1">Comandas abertas direto na quadra</p>
-            </div>
-
-            <div className="bg-white p-4 rounded-[var(--radius-card)] border border-[var(--border)] shadow-xs">
-              <span className="text-kpi text-[var(--text-1)] block">+45%</span>
-              <span className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wide">
-                Retenção de Atletas
-              </span>
-              <p className="text-rule mt-1">Com rankings e torneios ativos</p>
-            </div>
-          </div>
         </div>
       </div>
     </section>

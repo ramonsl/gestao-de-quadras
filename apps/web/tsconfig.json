@@ -26,7 +26,12 @@
       "@gestao-de-quadras/core/auth/auth.service": ["../../packages/core/src/auth/auth.service.ts"],
       "@gestao-de-quadras/core/email/email.provider": ["../../packages/core/src/email/email.provider.ts"],
       "@gestao-de-quadras/core/users/user.service": ["../../packages/core/src/users/user.service.ts"],
-      "@gestao-de-quadras/core/users/modules": ["../../packages/core/src/users/modules.ts"]
+      "@gestao-de-quadras/core/users/modules": ["../../packages/core/src/users/modules.ts"],
+      "@gestao-de-quadras/core/product": ["../../packages/core/src/product/index.ts"],
+      "@gestao-de-quadras/core/courts/court.service": ["../../packages/core/src/courts/court.service.ts"],
+      "@gestao-de-quadras/core/courts/court-service.service": ["../../packages/core/src/courts/court-service.service.ts"],
+      "@gestao-de-quadras/core/courts/court-time-slot.service": ["../../packages/core/src/courts/court-time-slot.service.ts"],
+      "@gestao-de-quadras/core/classes/class-package.service": ["../../packages/core/src/classes/class-package.service.ts"]
     }
   },
   "include": [

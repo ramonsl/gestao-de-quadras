@@ -3,7 +3,12 @@ import { auth } from "@/auth";
 import { getTenantDb } from "@gestao-de-quadras/db";
 import { createProduct, createProductInput } from "@gestao-de-quadras/core/product";
 
-type CreateProductState = { status: "error" | "success" | "idle"; message?: string; productId?: string };
+type CreateProductState = {
+  status: "error" | "success" | "idle";
+  message?: string;
+  productId?: string;
+  fieldErrors?: Record<string, string[]>;
+};
 
 export async function createProductAction(_prev: CreateProductState, formData: FormData): Promise<CreateProductState> {
   const s = await auth();

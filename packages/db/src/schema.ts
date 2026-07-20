@@ -197,6 +197,55 @@ export const customerOptInLgpd = tenantSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// Produtos da Copa e Estoque (CAD-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Produtos da copa (CAD-02): bebidas, lanches, acessórios.
+ * Preço em centavos (integer). Estoque local por tenant.
+ */
+export const products = tenantSchema.table(
+  "products",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    barcode: varchar("barcode", { length: 100 }),
+    salePriceCents: integer("sale_price_cents").notNull(),
+    category: varchar("category", { length: 100 }).notNull(),
+    currentStock: integer("current_stock").default(0).notNull(),
+    minStock: integer("min_stock").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    barcodeIdx: index("products_barcode_idx").on(t.barcode),
+    categoryIdx: index("products_category_idx").on(t.category),
+  })
+);
+
+/**
+ * Auditoria de movimentação de estoque (CAD-02).
+ * `quantityChange` negativo = débito (venda), positivo = reposição.
+ */
+export const stockMovements = tenantSchema.table(
+  "stock_movements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    quantityChange: integer("quantity_change").notNull(),
+    reason: varchar("reason", { length: 50 }).notNull(),
+    userId: uuid("user_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    productIdIdx: index("stock_movements_product_id_idx").on(t.productId),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // Quadras, Serviços e Aulas (CAD-03, CAD-05)
 // ---------------------------------------------------------------------------
 
@@ -305,6 +354,10 @@ export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type CustomerOptInLgpd = typeof customerOptInLgpd.$inferSelect;
 export type NewCustomerOptInLgpd = typeof customerOptInLgpd.$inferInsert;
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+export type StockMovement = typeof stockMovements.$inferSelect;
+export type NewStockMovement = typeof stockMovements.$inferInsert;
 export type Court = typeof courts.$inferSelect;
 export type NewCourt = typeof courts.$inferInsert;
 export type CourtService = typeof courtServices.$inferSelect;

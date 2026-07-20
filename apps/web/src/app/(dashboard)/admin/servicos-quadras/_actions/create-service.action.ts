@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { createCourtService } from "@gestao-de-quadras/core/courts/court-service.service";
 import { z } from "zod";
 
@@ -39,7 +39,7 @@ export async function createServiceAction(formData: FormData) {
   }
 
   try {
-    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
+    const ctx = arenaContext(session.user);
     const service = await createCourtService(ctx, {
       courtId: result.data.courtId,
       serviceType: result.data.serviceType,

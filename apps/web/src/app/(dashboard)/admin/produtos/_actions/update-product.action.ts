@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { updateProduct, updateProductInput } from "@gestao-de-quadras/core/product";
 
 export type UpdateProductState =
@@ -51,7 +51,7 @@ export async function updateProductAction(
   }
 
   try {
-    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
+    const ctx = arenaContext(session.user);
     const product = await updateProduct(productId, parsed.data, ctx);
     if (!product) return { status: "error", message: "Produto não encontrado" };
     return { status: "success", productId: product.id };

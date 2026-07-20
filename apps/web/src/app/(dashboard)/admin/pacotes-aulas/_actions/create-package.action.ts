@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { createClassPackage } from "@gestao-de-quadras/core/classes/class-package.service";
 import { z } from "zod";
 
@@ -37,7 +37,7 @@ export async function createPackageAction(formData: FormData) {
   }
 
   try {
-    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
+    const ctx = arenaContext(session.user);
     const classPackage = await createClassPackage(ctx, {
       name: result.data.name,
       totalClassCount: result.data.totalClassCount,

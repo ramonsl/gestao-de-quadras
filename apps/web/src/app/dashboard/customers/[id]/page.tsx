@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { getCustomerById } from "@gestao-de-quadras/core/customers/customer.service";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -19,7 +19,7 @@ export default async function CustomerDetailPage({
     redirect("/dashboard");
   }
 
-  const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
+  const ctx = arenaContext(session.user);
   const customer = await getCustomerById(ctx, params.id);
 
   if (!customer) {

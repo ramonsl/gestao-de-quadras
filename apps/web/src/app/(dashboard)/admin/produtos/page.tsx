@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { listProducts, getProductsWithLowStock } from "@gestao-de-quadras/core/product";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -12,7 +12,7 @@ export default async function ProdutosPage() {
   if (!s?.user) redirect("/login");
   if (!["admin", "gerente"].includes(s.user.role ?? "")) redirect("/dashboard");
 
-  const ctx = { db, tenantId: s.user.tenantId, actorUserId: s.user.id };
+  const ctx = arenaContext(s.user);
   const all = await listProducts({}, ctx);
   const low = await getProductsWithLowStock(ctx);
 

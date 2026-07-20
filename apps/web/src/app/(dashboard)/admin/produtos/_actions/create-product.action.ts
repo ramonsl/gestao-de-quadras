@@ -1,6 +1,6 @@
 "use server";
 import { auth } from "@/auth";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { createProduct, createProductInput } from "@gestao-de-quadras/core/product";
 
 type CreateProductState = {
@@ -34,7 +34,7 @@ export async function createProductAction(_prev: CreateProductState, formData: F
   if (!parsed.success) return { status: "error", message: "Dados inválidos", fieldErrors: parsed.error.flatten().fieldErrors };
 
   try {
-    const ctx = { db, tenantId: s.user.tenantId, actorUserId: s.user.id };
+    const ctx = arenaContext(s.user);
     const p = await createProduct(parsed.data, ctx);
     return { status: "success", productId: p.id };
   } catch (e) {

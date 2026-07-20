@@ -1,6 +1,6 @@
 import type { Product } from "@gestao-de-quadras/db/schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle } from "@/components/ui/icons";
+import { TriangleAlert as AlertTriangle } from "lucide-react";
 import Link from "next/link";
 
 export function LowStockAlert({ products }: { products: Product[] }) {

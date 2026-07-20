@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { createCourtTimeSlot } from "@gestao-de-quadras/core/courts/court-time-slot.service";
 import { z } from "zod";
 
@@ -57,7 +57,7 @@ export async function createTimeSlotAction(formData: FormData) {
   }
 
   try {
-    const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
+    const ctx = arenaContext(session.user);
     const slot = await createCourtTimeSlot(ctx, {
       courtId: result.data.courtId,
       dayOfWeek: result.data.dayOfWeek as any,

@@ -35,6 +35,15 @@ function contextFor(session: ArenaSession): ArenaUserContext {
 }
 
 /**
+ * Monta o `TenantContext` (row-level) a partir do `session.user` do Auth.js.
+ * Ponto ÚNICO de construção do contexto nas server actions/páginas — se o shape
+ * de `TenantContext` mudar, muda só aqui.
+ */
+export function arenaContext(user: { id: string; tenantId: string }): ArenaUserContext {
+  return { db, tenantId: user.tenantId, actorUserId: user.id };
+}
+
+/**
  * Retorna a sessão + o contexto de tenant (row-level) pronto para o core, sem
  * redirecionar. Para uso em server actions que devolvem erro em vez de navegar.
  */

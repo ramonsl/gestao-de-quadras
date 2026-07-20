@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import {
   findOrCreateGlobalCustomer,
   createGlobalCustomer,
@@ -47,11 +48,7 @@ export async function createCustomerAction(formData: FormData) {
   }
 
   try {
-    const ctx = {
-      db,
-      tenantId: session.user.tenantId,
-      actorUserId: session.user.id,
-    };
+    const ctx = arenaContext(session.user);
 
     // Buscar ou criar cliente global (schema public)
     const { found, customer: globalCustomer } = await findOrCreateGlobalCustomer(

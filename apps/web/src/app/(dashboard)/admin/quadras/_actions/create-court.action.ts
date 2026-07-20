@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { createCourt } from "@gestao-de-quadras/core/courts/court.service";
 import { z } from "zod";
 
@@ -31,7 +31,7 @@ export async function createCourtAction(formData: FormData) {
     return { error: result.error.flatten().fieldErrors };
   }
 
-  const ctx = { db, tenantId: session.user.tenantId, actorUserId: session.user.id };
+  const ctx = arenaContext(session.user);
   await createCourt(ctx, {
     name: result.data.name,
     modality: result.data.modality,

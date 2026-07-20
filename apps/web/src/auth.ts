@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import { db } from "@gestao-de-quadras/db";
 import { validateCredentials } from "@gestao-de-quadras/core/auth/auth.service";
+import { authConfig } from "./auth.config";
 
 const loginSchema = z.object({
   /** username OU e-mail — o operador pode não ter e-mail (SAAS-12) */
@@ -12,10 +13,7 @@ const loginSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Jornada operacional de um turno; o status do operador ainda é revalidado
-  // no banco a cada requisição protegida (ver lib/session.ts).
-  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
-
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {

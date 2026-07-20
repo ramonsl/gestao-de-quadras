@@ -23,10 +23,17 @@ export async function updateProductAction(
     return { status: "error", message: "Permissão negada" };
   }
 
+  const parseCents = (val: string | null): number | undefined => {
+    if (!val) return undefined;
+    const normalized = val.replace(",", ".");
+    const parsed = Math.round(parseFloat(normalized) * 100);
+    return parsed || undefined;
+  };
+
   const input = {
     name: formData.get("name"),
     barcode: formData.get("barcode") || null,
-    salePriceCents: parseInt(formData.get("salePriceCents") as string) || undefined,
+    salePriceCents: parseCents(formData.get("salePriceCents") as string),
     category: formData.get("category"),
     currentStock: parseInt(formData.get("currentStock") as string) || undefined,
     minStock: parseInt(formData.get("minStock") as string) || undefined,

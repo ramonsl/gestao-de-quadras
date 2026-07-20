@@ -10,10 +10,16 @@ export async function createProductAction(_prev: CreateProductState, formData: F
   if (!s?.user?.tenantSlug) return { status: "error", message: "Não autenticado" };
   if (!["admin", "gerente"].includes(s.user.role ?? "")) return { status: "error", message: "Permissão negada" };
 
+  const parseCents = (val: string | null): number => {
+    if (!val) return 0;
+    const normalized = val.replace(",", ".");
+    return Math.round(parseFloat(normalized) * 100) || 0;
+  };
+
   const input = {
     name: formData.get("name"),
     barcode: formData.get("barcode") || null,
-    salePriceCents: parseInt(formData.get("salePriceCents") as string) || 0,
+    salePriceCents: parseCents(formData.get("salePriceCents") as string),
     category: formData.get("category"),
     currentStock: parseInt(formData.get("currentStock") as string) || 0,
     minStock: parseInt(formData.get("minStock") as string) || 0,

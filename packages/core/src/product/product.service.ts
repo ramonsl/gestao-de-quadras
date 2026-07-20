@@ -52,13 +52,26 @@ export async function deleteProduct(id: string, tenantDb: TenantDb, userId?: str
 }
 
 export async function debitStock(productId: string, qty: number, reason: string, tenantDb: TenantDb, userId?: string): Promise<{ success: boolean; newStock?: number; reason?: string }> {
-  const p = await getProductById(productId, tenantDb);
-  if (!p) return { success: false, reason: "product_not_found" };
-  if (p.currentStock < qty) return { success: false, reason: "insufficient_stock" };
-  const newStock = p.currentStock - qty;
+  let result: { success: boolean; newStock?: number; reason?: string } = { success: false };
+
   await tenantDb.transaction(async tx => {
+    const [p] = await tx.select().from(products).where(eq(products.id, productId));
+
+    if (!p) {
+      result = { success: false, reason: "product_not_found" };
+      return;
+    }
+
+    if (p.currentStock < qty) {
+      result = { success: false, reason: "insufficient_stock" };
+      return;
+    }
+
+    const newStock = p.currentStock - qty;
     await tx.update(products).set({ currentStock: newStock, updatedAt: new Date() }).where(eq(products.id, productId));
     await tx.insert(stockMovements).values({ productId, quantityChange: -qty, reason, userId: userId || null });
+    result = { success: true, newStock };
   });
-  return { success: true, newStock };
+
+  return result;
 }

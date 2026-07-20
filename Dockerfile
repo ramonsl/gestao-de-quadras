@@ -18,6 +18,8 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
+ENV AUTH_SECRET="placeholder_secret_for_build_only_1234567890"
 
 RUN npm run build --workspace=apps/web
 

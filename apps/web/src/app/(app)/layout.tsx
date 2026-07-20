@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/session";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Shell autenticado único (SAAS-12 + Épico Cadastros): sidebar navy + área de conteúdo.
  * Exibe dinamicamente os módulos habilitados para o operador/admin logado.

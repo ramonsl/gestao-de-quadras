@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireSession } from "@/lib/session";
 
 /**
- * Shell autenticado (SAAS-12 + Épico Cadastros): sidebar navy + área de conteúdo.
+ * Shell autenticado único (SAAS-12 + Épico Cadastros): sidebar navy + área de conteúdo.
  * Exibe dinamicamente os módulos habilitados para o operador/admin logado.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -39,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <div className="space-y-1">
                 {canAccess("crm") && (
                   <Link
-                    href="/dashboard/customers"
+                    href="/customers"
                     className="flex items-center gap-2 px-2.5 h-9 rounded-[var(--radius-control)] text-sm text-white/90 transition-colors duration-[180ms] hover:bg-[var(--sidebar-hover)]"
                   >
                     <span className="w-2 h-2 rounded-full bg-[var(--accent-bright)]" />

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pencil as Edit, Trash2 } from "lucide-react";
-import { deleteProductAction } from "@/app/(dashboard)/admin/produtos/_actions/delete-product.action";
+import { deleteProductAction } from "@/app/(app)/admin/produtos/_actions/delete-product.action";
 
 export function ProductsList({ products: init }: { products: Product[] }) {
   const [list, setList] = useState(init);

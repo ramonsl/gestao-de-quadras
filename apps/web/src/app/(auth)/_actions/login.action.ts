@@ -39,6 +39,7 @@ export async function loginAction(
   }
 
   try {
+    console.log("Tentando login no tenantSlug:", tenantSlug, "para identifier:", parsed.data.identifier);
     await signIn("credentials", {
       identifier: parsed.data.identifier,
       password: parsed.data.password,
@@ -47,11 +48,12 @@ export async function loginAction(
     });
   } catch (error) {
     if (error instanceof AuthError) {
+      console.error("AuthError capturado:", error.type, error.message, error.cause);
       switch (error.type) {
         case "CredentialsSignin":
           return { status: "error", message: "Usuário ou senha incorretos. Verifique e tente novamente." };
         default:
-          return { status: "error", message: "Erro ao autenticar. Tente novamente." };
+          return { status: "error", message: `Erro ao autenticar: ${error.message}` };
       }
     }
     // signIn lança redirect — propagar normalmente

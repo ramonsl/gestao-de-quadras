@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/session";
 import { createCustomerAction } from "../_actions/create-customer.action";
+import { WhatsappInput } from "@/components/ui/whatsapp-input";
 import Link from "next/link";
 
 const labelCls = "block text-xs font-semibold text-[var(--text-2)] mb-1.5";
@@ -29,19 +30,9 @@ export default async function NewCustomerPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="whatsapp" className={labelCls}>
-                WhatsApp (E.164) *
+                WhatsApp *
               </label>
-              <input
-                type="tel"
-                id="whatsapp"
-                name="whatsapp"
-                placeholder="+5511999999999"
-                className={inputCls}
-                required
-              />
-              <p className="mt-1 text-[11px] text-[var(--text-3)]">
-                Exemplo: +5551999998888
-              </p>
+              <WhatsappInput id="whatsapp" name="whatsapp" required />
             </div>
 
             <div>

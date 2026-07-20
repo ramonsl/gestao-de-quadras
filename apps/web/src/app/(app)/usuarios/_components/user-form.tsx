@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { MODULES, MODULE_LABELS } from "@gestao-de-quadras/core/users/modules";
 import type { ArenaUserListItem } from "@gestao-de-quadras/core/users/user.service";
+import { WhatsappInput } from "@/components/ui/whatsapp-input";
 import type { UserFormState } from "../_actions/user.actions";
 
 const initialState: UserFormState = { status: "idle" };
@@ -86,7 +87,7 @@ export function UserForm({
 
         <div>
           <label htmlFor="phone" className={labelCls}>Telefone (opcional)</label>
-          <input id="phone" name="phone" type="tel" defaultValue={user?.phone ?? ""} placeholder="opcional" className={inputCls} />
+          <WhatsappInput id="phone" name="phone" required={false} defaultValue={user?.phone ?? ""} />
         </div>
 
         {mode === "create" && (

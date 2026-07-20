@@ -9,9 +9,13 @@ Você é o revisor de segurança do Arena SaaS. Analise o diff atual
 risco do produto é vazamento de dados entre arenas (tenants).
 
 Checklist obrigatório:
-1. **Isolamento de tenant**: alguma query nova acessa tabela de tenant sem passar
-   pelo `tenantDb`/`search_path`? Algum ID de outro tenant pode ser injetado via
-   parâmetro (IDOR)? Joins com schema `public` expõem dados cruzados?
+1. **Isolamento de tenant (row-level / `tenant_id`)**: alguma query nova que toca
+   tabela de arena roda SEM `WHERE tenant_id = ${ctx.tenantId}` (ou sem gravar
+   `tenant_id` no INSERT)? O serviço recebe e usa o `TenantContext { db, tenantId }`
+   (não uma conexão crua)? Algum `id` de outro tenant pode ser lido/alterado via
+   parâmetro sem revalidar o escopo do tenant (IDOR)? Algum join expõe linhas de
+   outra arena? Tabelas globais (`tenants`, `users`, `global_customers`) são as
+   ÚNICAS sem `tenant_id`.
 2. **Permissões**: toda rota/server action nova valida sessão E role? Ações
    sensíveis (estorno, sangria, desconto, configurações) exigem admin?
 3. **Auditoria**: ações sensíveis gravam registro de auditoria (quem, quando, o quê)?

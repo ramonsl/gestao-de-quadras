@@ -1,9 +1,14 @@
 "use server";
 import { auth } from "@/auth";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { createProduct, createProductInput } from "@gestao-de-quadras/core/product";
 
-type CreateProductState = { status: "error" | "success" | "idle"; message?: string; productId?: string };
+type CreateProductState = {
+  status: "error" | "success" | "idle";
+  message?: string;
+  productId?: string;
+  fieldErrors?: Record<string, string[]>;
+};
 
 export async function createProductAction(_prev: CreateProductState, formData: FormData): Promise<CreateProductState> {
   const s = await auth();
@@ -29,7 +34,8 @@ export async function createProductAction(_prev: CreateProductState, formData: F
   if (!parsed.success) return { status: "error", message: "Dados inválidos", fieldErrors: parsed.error.flatten().fieldErrors };
 
   try {
-    const p = await createProduct(parsed.data, getTenantDb(s.user.tenantSlug), s.user.id);
+    const ctx = arenaContext(s.user);
+    const p = await createProduct(parsed.data, ctx);
     return { status: "success", productId: p.id };
   } catch (e) {
     return { status: "error", message: "Erro ao criar" };

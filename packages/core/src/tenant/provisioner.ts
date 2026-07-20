@@ -1,5 +1,6 @@
 import { db, tenants } from "@gestao-de-quadras/db";
 import { sql } from "drizzle-orm";
+import { rows } from "../db/tenant";
 import { MODULES } from "../users/modules";
 
 export interface ProvisionInput {
@@ -17,11 +18,9 @@ export interface ProvisionInput {
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 /**
- * Cria dinamicamente um novo schema de tenant no PostgreSQL e insere o
- * inquilino + o operador Admin inicial (dentro do próprio schema do tenant).
- *
- * Operadores são entidades DO tenant (SAAS-12): credenciais vivem em
- * `tenant_<slug>.users_tenants`, não no schema público.
+ * Provisiona uma nova arena (modelo row-level): insere a linha em `tenants` e o
+ * operador Admin inicial em `users_tenants` (com `tenant_id`). Sem CREATE SCHEMA
+ * — as tabelas já existem no schema único `public` (ver Regra inviolável #1).
  */
 export async function provisionNewTenant(input: ProvisionInput) {
   if (!SLUG_PATTERN.test(input.slug)) {
@@ -30,94 +29,26 @@ export async function provisionNewTenant(input: ProvisionInput) {
     );
   }
 
-  const schemaName = `tenant_${input.slug}`;
-  const table = sql`${sql.identifier(schemaName)}.${sql.identifier("users_tenants")}`;
-  const auditTable = sql`${sql.identifier(schemaName)}.${sql.identifier("audit_logs")}`;
+  // 1. Cria o Tenant e obtém seu id
+  const [tenant] = await db
+    .insert(tenants)
+    .values({ slug: input.slug, name: input.name, status: "active" })
+    .returning({ id: tenants.id });
 
-  // 1. Cria o Tenant global no schema public
-  await db.insert(tenants).values({
-    slug: input.slug,
-    name: input.name,
-    status: "active",
-  });
-
-  // 2. Cria o schema físico do tenant — RNF-01: isolamento estrito
-  await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(schemaName)}`);
-
-  // 3. Cria as tabelas do tenant (espelham tenant_template do schema.ts)
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS ${table} (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      "username" varchar(50) NOT NULL,
-      "name" varchar(120) NOT NULL,
-      "email" varchar(255),
-      "phone" varchar(20),
-      "password_hash" text,
-      "role" varchar(20) NOT NULL,
-      "modules_allowed" text DEFAULT '[]' NOT NULL,
-      "status" varchar(20) DEFAULT 'active' NOT NULL,
-      "must_change_password" boolean DEFAULT false NOT NULL,
-      "activated_at" timestamp,
-      "activation_token" text,
-      "activation_token_expires_at" timestamp,
-      "reset_token" text,
-      "reset_token_expires_at" timestamp,
-      "failed_attempts" integer DEFAULT 0 NOT NULL,
-      "locked_until" timestamp,
-      "last_login_at" timestamp,
-      "created_at" timestamp DEFAULT now() NOT NULL,
-      "updated_at" timestamp DEFAULT now() NOT NULL
-    )
-  `);
-
-  // Nomes de índice são escopados por schema — sem sufixo de slug, para não
-  // divergir do script de migração e acabar criando um índice duplicado.
-  await db.execute(sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("users_tenants_username_unique")}
-    ON ${table} ("username")
-  `);
-
-  // E-mail é opcional, mas quando informado precisa ser único no tenant:
-  // sem isso, o login por e-mail e o reset por token atingiriam conta arbitrária.
-  await db.execute(sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("users_tenants_email_unique")}
-    ON ${table} ("email") WHERE "email" IS NOT NULL
-  `);
-
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS ${auditTable} (
-      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      "user_id" uuid NOT NULL,
-      "action" text NOT NULL,
-      "details" text,
-      "created_at" timestamp DEFAULT now() NOT NULL
-    )
-  `);
-
-  // 4. Insere o operador Admin inicial no schema do tenant (já ativo).
-  //    Admin tem acesso irrestrito; modulesAllowed recebe todos os módulos.
+  // 2. Insere o operador Admin inicial (já ativo, acesso irrestrito)
   const allModules = JSON.stringify([...MODULES]);
-  const [admin] = (
-    await db.execute<{ id: string }>(sql`
-      INSERT INTO ${table}
-        ("username", "name", "email", "password_hash", "role", "modules_allowed", "status", "activated_at")
-      VALUES (
-        ${input.adminUsername},
-        ${input.adminName},
-        ${input.adminEmail ?? null},
-        ${input.adminPasswordHash},
-        'admin',
-        ${allModules},
-        'active',
-        now()
-      )
-      RETURNING "id"
-    `)
-  ).rows as unknown as Array<{ id: string }>;
+  const inserted = await db.execute<{ id: string }>(
+    sql`INSERT INTO users_tenants
+          (tenant_id, username, name, email, password_hash, role, modules_allowed, status, activated_at)
+        VALUES (${tenant.id}, ${input.adminUsername}, ${input.adminName}, ${input.adminEmail ?? null},
+                ${input.adminPasswordHash}, 'admin', ${allModules}, 'active', now())
+        RETURNING id`
+  );
+  const adminUserId = rows<{ id: string }>(inserted)[0].id;
 
   return {
     tenantSlug: input.slug,
-    adminUserId: admin.id,
-    schemaName,
+    tenantId: tenant.id,
+    adminUserId,
   };
 }

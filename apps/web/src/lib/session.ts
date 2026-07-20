@@ -6,6 +6,8 @@ import { db } from "@gestao-de-quadras/db";
 export interface ArenaSession {
   userId: string;
   username: string;
+  /** UUID da arena (public.tenants.id). */
+  tenantId: string;
   tenantSlug: string;
   role: "admin" | "gerente" | "atendente";
   modulesAllowed: string[];
@@ -15,24 +17,42 @@ export interface ArenaSession {
 /** Lê a sessão do operador logado (ou null). */
 export async function getArenaSession(): Promise<ArenaSession | null> {
   const session = await auth();
-  if (!session) return null;
-  const s = session as unknown as {
-    user: { id: string };
-    tenantSlug?: string;
-    username?: string;
-    role?: string;
-    modulesAllowed?: string[];
-    mustChangePassword?: boolean;
-  };
-  if (!s.tenantSlug || !s.role) return null;
+  const u = session?.user;
+  if (!u?.tenantId || !u?.role) return null;
   return {
-    userId: s.user.id,
-    username: s.username ?? "",
-    tenantSlug: s.tenantSlug,
-    role: s.role as ArenaSession["role"],
-    modulesAllowed: s.modulesAllowed ?? [],
-    mustChangePassword: s.mustChangePassword ?? false,
+    userId: u.id,
+    username: u.username ?? "",
+    tenantId: u.tenantId,
+    tenantSlug: u.tenantSlug,
+    role: u.role as ArenaSession["role"],
+    modulesAllowed: u.modulesAllowed ?? [],
+    mustChangePassword: u.mustChangePassword ?? false,
   };
+}
+
+function contextFor(session: ArenaSession): ArenaUserContext {
+  return { db, tenantId: session.tenantId, actorUserId: session.userId };
+}
+
+/**
+ * Monta o `TenantContext` (row-level) a partir do `session.user` do Auth.js.
+ * Ponto ÚNICO de construção do contexto nas server actions/páginas — se o shape
+ * de `TenantContext` mudar, muda só aqui.
+ */
+export function arenaContext(user: { id: string; tenantId: string }): ArenaUserContext {
+  return { db, tenantId: user.tenantId, actorUserId: user.id };
+}
+
+/**
+ * Retorna a sessão + o contexto de tenant (row-level) pronto para o core, sem
+ * redirecionar. Para uso em server actions que devolvem erro em vez de navegar.
+ */
+export async function getArenaContext(): Promise<
+  { session: ArenaSession; ctx: ArenaUserContext } | null
+> {
+  const session = await getArenaSession();
+  if (!session) return null;
+  return { session, ctx: contextFor(session) };
 }
 
 /**
@@ -46,11 +66,7 @@ export async function requireSession(): Promise<ArenaSession> {
   const session = await getArenaSession();
   if (!session) redirect("/login");
 
-  const current = await getArenaUser(
-    { db, schemaName: `tenant_${session.tenantSlug}`, actorUserId: session.userId },
-    session.userId
-  );
-
+  const current = await getArenaUser(contextFor(session), session.userId);
   if (!current || current.status !== "active") redirect("/login");
 
   // O perfil/módulos vigentes no banco prevalecem sobre os do token
@@ -64,12 +80,5 @@ export async function requireSession(): Promise<ArenaSession> {
 export async function requireAdmin(): Promise<{ session: ArenaSession; ctx: ArenaUserContext }> {
   const session = await requireSession();
   if (session.role !== "admin") redirect("/usuarios/negado");
-  return {
-    session,
-    ctx: {
-      db,
-      schemaName: `tenant_${session.tenantSlug}`,
-      actorUserId: session.userId,
-    },
-  };
+  return { session, ctx: contextFor(session) };
 }

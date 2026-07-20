@@ -4,9 +4,7 @@ import { z } from "zod";
 import { db } from "@gestao-de-quadras/db";
 import { createPasswordResetToken } from "@gestao-de-quadras/core/auth/auth.service";
 import { ResendEmailProvider } from "@gestao-de-quadras/core/email/email.provider";
-import { tenants } from "@gestao-de-quadras/db/schema";
-import { eq } from "drizzle-orm";
-import { resolveTenantSlugFromHost } from "@/lib/tenant";
+import { resolveTenantFromHost } from "@/lib/tenant";
 
 const schema = z.object({
   email: z.string().email("E-mail inválido."),
@@ -33,32 +31,26 @@ export async function forgotPasswordAction(
 
   // O tenant vem do Host, nunca do formulário. Sem arena identificada,
   // responder como se tivesse enviado (não revelar nada).
-  const tenantSlug = await resolveTenantSlugFromHost();
-  if (!tenantSlug) {
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) {
     return { status: "sent" };
   }
 
-  const token = await createPasswordResetToken(email, `tenant_${tenantSlug}`, db);
+  const token = await createPasswordResetToken(email, tenant.id, db);
 
   // Sempre retornar "sent" — não revelar se o e-mail existe (segurança)
   if (!token) {
     return { status: "sent" };
   }
 
-  const [tenant] = await db
-    .select({ name: tenants.name })
-    .from(tenants)
-    .where(eq(tenants.slug, tenantSlug))
-    .limit(1);
-
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const resetUrl = `${baseUrl}/redefinir-senha/${token}?tenant=${tenantSlug}`;
+  const resetUrl = `${baseUrl}/redefinir-senha/${token}?tenant=${tenant.slug}`;
 
   const emailProvider = new ResendEmailProvider(process.env.RESEND_API_KEY!);
   await emailProvider.sendPasswordResetEmail({
     to: email,
     resetUrl,
-    arenaName: tenant?.name ?? tenantSlug,
+    arenaName: tenant.name,
   });
 
   return { status: "sent" };

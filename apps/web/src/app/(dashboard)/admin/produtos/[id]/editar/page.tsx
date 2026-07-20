@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { getProductById } from "@gestao-de-quadras/core/product";
 import { ProductForm } from "@/components/products/product-form";
 import { updateProductAction } from "../../_actions/update-product.action";
@@ -10,8 +10,8 @@ export default async function EditarProdutoPage({ params }: { params: { id: stri
   if (!session?.user) redirect("/login");
   if (!["admin", "gerente"].includes(session.user.role ?? "")) redirect("/dashboard");
 
-  const tenantDb = getTenantDb(session.user.tenantSlug!);
-  const product = await getProductById(params.id, tenantDb);
+  const ctx = arenaContext(session.user);
+  const product = await getProductById(params.id, ctx);
   if (!product) redirect("/admin/produtos");
 
   return (

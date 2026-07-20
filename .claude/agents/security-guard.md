@@ -11,7 +11,8 @@ devidamente protegida. Seja rigoroso — uma rota aberta é uma porta de entrada
 ## Checklist de Segurança de Rotas
 
 ### 1. Autenticação e Sessão
-- Toda rota protegida usa o helper `withTenant(handler)` ou o middleware de sessão?
+- Toda rota protegida resolve a sessão e monta o `TenantContext { db, tenantId }`
+  (helper `getArenaContext()`), e os serviços filtram `tenant_id` em toda query?
   Rotas sem autenticação são explicitamente marcadas como públicas (ex.: `/reservar`)?
 - A sessão contém `tenantId`, `userId`, `role` **e** `modulesAllowed`?
 - O `modulesAllowed` da sessão é verificado antes de renderizar módulos e executar actions?

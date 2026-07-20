@@ -15,9 +15,10 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
   ou em `packages/ui`. Não duplicar componentes existentes.
 - **Worker Node separado** (`apps/worker`) com **BullMQ + Redis** — Baileys, filas de
   notificação, cobranças recorrentes, jobs de CRM (aniversário/inatividade)
-- **PostgreSQL** — **um schema por tenant** (`tenant_<slug>`) + schema `public` para
-  registro de tenants, planos SaaS e usuários globais
-- **Drizzle ORM** + migrations versionadas aplicadas a todos os schemas
+- **PostgreSQL** — **schema único** (`public`), multi-tenant por **discriminador de
+  linha** (`tenant_id` em cada tabela de arena); RLS previsto como reforço. Tabelas
+  globais: `tenants`, `users`, `global_customers`
+- **Drizzle ORM** + migrations versionadas (uma vez, sem replicação por schema)
 - **Auth.js** — sessão com `tenantId`, `role` (admin | gerente | atendente) e `modulesAllowed`
 - **Asaas** — cobrança recorrente (filiação e assinaturas do SaaS)
 - **Baileys** — WhatsApp, SEMPRE atrás da interface `MessagingProvider` (nunca
@@ -26,9 +27,19 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
 
 ## Regras invioláveis
 
-1. **Isolamento de tenant**: toda query roda com `search_path` do tenant da sessão.
-   Nenhum acesso a dados sem tenant resolvido. Repositórios recebem `tenantDb`,
-   nunca criam conexão própria.
+1. **Isolamento de tenant — DISCRIMINADOR POR LINHA (`tenant_id`) (MANDATÓRIO)**:
+   um único schema (`public`); toda tabela com escopo de arena carrega
+   `tenant_id uuid NOT NULL REFERENCES tenants(id)`. **Toda** query de dados de
+   arena filtra/grava `tenant_id` explicitamente — este é o mecanismo de
+   isolamento. Os serviços recebem um `TenantContext { db, tenantId, actorUserId }`
+   (ver `packages/core/src/db/tenant.ts`); o `tenantId` é validado (`assertTenantId`,
+   UUID) antes de entrar no SQL. É **PROIBIDO**: (a) query que toca tabela de arena
+   sem `WHERE tenant_id = ${ctx.tenantId}`; (b) aceitar `id` de outro tenant via
+   parâmetro sem revalidar o escopo (IDOR); (c) join que exponha linhas de outra
+   arena. `global_customers`, `users` e `tenants` são globais (sem `tenant_id`).
+   **RLS do Postgres** (política `USING (tenant_id = current_setting('app.current_tenant'))`)
+   está previsto como reforço (hardening) num passo dedicado — não substitui o
+   filtro explícito, que continua obrigatório.
 2. **Testes obrigatórios**: toda função de serviço tem teste unitário (Vitest);
    toda US tem teste e2e (Playwright) derivado dos critérios de aceite. PR sem
    teste não é aceito.
@@ -62,6 +73,12 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
     qualquer componente de UI ou função utilitária, buscar (Grep/Glob) se já
     existe em `packages/ui` ou em `shadcn/ui`. Não duplicar. Se precisar ajustar
     um existente, prefira extensão ou compositão ao início de um novo.
+    O kit shadcn/ui do app vive em `apps/web/src/components/ui/*` (config em
+    `apps/web/components.json`, helper `cn` em `@/lib/utils`, ícones via
+    `lucide-react`). Os componentes seguem o padrão shadcn (cva + `cn` + Radix),
+    mas são **estilizados pelos tokens do design system** (`var(--accent)`,
+    `--text-*`, `--radius-*`; ver `docs/design-system.md`), NÃO pela paleta
+    genérica do shadcn — ao rodar `shadcn add`, reestilize com os tokens.
 13. **Boy Scout Rule**: ao tocar em um arquivo, deixe-o mais limpo do que encontrou.
     Corrija pelo menos os erros de lint do arquivo tocado. Não introduza novos
     erros — o CI é o guardião.

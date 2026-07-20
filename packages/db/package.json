@@ -5,9 +5,8 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate.ts",
-    "db:migrate:tenants": "tsx src/migrate-tenants-saas12.ts"
+    "db:generate": "drizzle-kit generate:pg",
+    "db:migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",

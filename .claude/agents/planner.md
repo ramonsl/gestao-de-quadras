@@ -14,7 +14,8 @@ Processo:
 
 O plano deve conter, nesta ordem:
 - **Escopo**: o que entra e o que explicitamente NÃO entra (só o que a US pede)
-- **Migrations**: tabelas/colunas novas no schema de tenant (ou public), com tipos
+- **Migrations**: tabelas/colunas novas (schema único `public`); tabela de arena
+  leva `tenant_id` (FK → tenants) e índices compostos com `tenant_id`, com tipos
 - **Contratos**: assinaturas das funções de serviço em `packages/core` (entrada/saída Zod)
 - **Rotas/UI**: páginas, server actions ou rotas de API afetadas em `apps/web`
 - **Jobs**: filas/workers afetados em `apps/worker` (se houver)

@@ -35,7 +35,7 @@ vi.mock("@node-rs/argon2", () => ({
 // Fake de db.execute (o serviço usa db.execute(sql`...`), não o query builder)
 // ---------------------------------------------------------------------------
 
-const SCHEMA = "tenant_arena-a";
+const SCHEMA = "11111111-1111-1111-1111-111111111111"; // tenantId (UUID) da arena de teste
 
 function authMock(selectRow: Record<string, unknown> | null) {
   const calls: RecordedCall[] = [];
@@ -99,7 +99,7 @@ describe("validateCredentials", () => {
       },
     });
     // buscou por username (não por e-mail)
-    expect(calls[0].text).toMatch(/WHERE username =/);
+    expect(calls[0].text).toMatch(/ username = /);
     // login bem-sucedido registra o último acesso
     expect(updateCall(calls)!.text).toMatch(/last_login_at = now\(\)/);
   });
@@ -112,7 +112,7 @@ describe("validateCredentials", () => {
     const result = await validateCredentials("operador@arena.com", "senhaCorreta1", SCHEMA, db);
 
     expect(result.success).toBe(true);
-    expect(calls[0].text).toMatch(/WHERE email =/);
+    expect(calls[0].text).toMatch(/ email = /);
   });
 
   it("retorna invalid_credentials para identificador inexistente", async () => {
@@ -177,14 +177,15 @@ describe("validateCredentials", () => {
 // ---------------------------------------------------------------------------
 
 describe("createActivationToken", () => {
-  it("gera token hex de 64 chars e persiste no schema do tenant", async () => {
+  it("gera token hex de 64 chars e persiste (filtrando tenant_id)", async () => {
     const { db, calls } = authMock(null);
     const token = await createActivationToken("user-1", SCHEMA, db);
 
     expect(token).toHaveLength(64);
     const update = updateCall(calls)!;
     expect(update.text).toMatch(/activation_token =/);
-    expect(update.text).toContain(`${SCHEMA}.users_tenants`);
+    expect(update.text).toMatch(/UPDATE users_tenants/);
+    expect(update.text).toMatch(/tenant_id = /);
   });
 });
 

@@ -1,4 +1,6 @@
 import { headers } from "next/headers";
+import { eq } from "drizzle-orm";
+import { db, tenants } from "@gestao-de-quadras/db";
 
 /**
  * Resolve o slug do tenant a partir do Host da requisição — mesma regra do
@@ -21,4 +23,21 @@ export async function resolveTenantSlugFromHost(): Promise<string | null> {
   }
 
   return null;
+}
+
+/**
+ * Resolve o tenant (slug + id + name) a partir do Host. Row-level exige o
+ * `tenant_id` (UUID) — retorna null se o Host não mapear uma arena existente.
+ */
+export async function resolveTenantFromHost(): Promise<
+  { slug: string; id: string; name: string } | null
+> {
+  const slug = await resolveTenantSlugFromHost();
+  if (!slug) return null;
+  const [tenant] = await db
+    .select({ id: tenants.id, name: tenants.name })
+    .from(tenants)
+    .where(eq(tenants.slug, slug))
+    .limit(1);
+  return tenant ? { slug, id: tenant.id, name: tenant.name } : null;
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { arenaContext } from "@/lib/session";
 import { deleteProduct } from "@gestao-de-quadras/core/product";
 
 export async function deleteProductAction(productId: string) {
@@ -15,8 +15,8 @@ export async function deleteProductAction(productId: string) {
   }
 
   try {
-    const tenantDb = getTenantDb(session.user.tenantSlug);
-    const deleted = await deleteProduct(productId, tenantDb, session.user.id);
+    const ctx = arenaContext(session.user);
+    const deleted = await deleteProduct(productId, ctx);
     if (!deleted) return { status: "error", message: "Produto não encontrado" };
     return { status: "success" };
   } catch (error) {

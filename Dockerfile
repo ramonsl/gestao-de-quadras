@@ -9,7 +9,8 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/core/package.json ./packages/core/
 COPY packages/db/package.json ./packages/db/
 
-RUN npm ci
+# Garante instalacao de todas as devDependencies para compilar CSS/PostCSS
+RUN npm ci --include=dev
 
 FROM base AS builder
 WORKDIR /app
@@ -18,8 +19,6 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-# Desativa prerender rigoroso de dev no build
-ENV NEXT_BUILD_SKIP_DYNAMIC_CHECK=true
 
 RUN npm run build --workspace=apps/web
 

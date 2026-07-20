@@ -8,24 +8,22 @@ import { ProductsList } from "@/components/products/products-list";
 import { LowStockAlert } from "@/components/products/low-stock-alert";
 
 export default async function ProdutosPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  if (!["admin", "gerente"].includes(session.user.role ?? "")) redirect("/dashboard");
+  const s = await auth();
+  if (!s?.user) redirect("/login");
+  if (!["admin", "gerente"].includes(s.user.role ?? "")) redirect("/dashboard");
 
-  const tenantDb = getTenantDb(session.user.tenantSlug!);
-  const allProducts = await listProducts({}, tenantDb);
-  const lowStockProducts = await getProductsWithLowStock(tenantDb);
+  const db = getTenantDb(s.user.tenantSlug!);
+  const all = await listProducts({}, db);
+  const low = await getProductsWithLowStock(db);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Produtos da Copa</h1>
-        <Link href="/admin/produtos/novo">
-          <Button>Novo Produto</Button>
-        </Link>
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Produtos</h1>
+        <Link href="/admin/produtos/novo"><Button>Novo</Button></Link>
       </div>
-      {lowStockProducts.length > 0 && <LowStockAlert products={lowStockProducts} />}
-      <ProductsList products={allProducts} />
+      {low.length > 0 && <LowStockAlert products={low} />}
+      <ProductsList products={all} />
     </div>
   );
 }

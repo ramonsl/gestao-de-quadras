@@ -34,10 +34,10 @@ export async function getProductById(id: string, tenantDb: TenantDb): Promise<Pr
 export async function listProducts(filters?: { category?: string; searchTerm?: string }, tenantDb?: TenantDb): Promise<Product[]> {
   if (!tenantDb) throw new Error("tenantDb required");
   let q = tenantDb.select().from(products);
-  const w: any[] = [];
-  if (filters?.category) w.push(eq(products.category, filters.category));
-  if (filters?.searchTerm) w.push(ilike(products.name, `%${filters.searchTerm}%`));
-  if (w.length) q = q.where(and(...w));
+  const conditions: unknown[] = [];
+  if (filters?.category) conditions.push(eq(products.category, filters.category));
+  if (filters?.searchTerm) conditions.push(ilike(products.name, `%${filters.searchTerm}%`));
+  if (conditions.length) q = q.where(and(...(conditions as Parameters<typeof and>)));
   return q;
 }
 

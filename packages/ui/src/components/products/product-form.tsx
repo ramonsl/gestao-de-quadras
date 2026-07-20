@@ -2,12 +2,20 @@
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import type { Product } from "@gestao-de-quadras/db/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export function ProductForm({ action, initialData }: any) {
+type FormState = { status: string; message?: string; fieldErrors?: Record<string, string[]> };
+
+interface ProductFormProps {
+  action: (prev: FormState, formData: FormData) => Promise<FormState>;
+  initialData?: Product;
+}
+
+export function ProductForm({ action, initialData }: ProductFormProps) {
   const router = useRouter();
   const [state, form] = useFormState(action, { status: "idle" });
 

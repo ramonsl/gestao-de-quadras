@@ -8,6 +8,7 @@ import {
   integer,
   boolean,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,51 @@ export const auditLogs = tenantSchema.table("audit_logs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/**
+ * Produtos da copa (CAD-02): bebidas, lanches, acessórios.
+ * Preço em centavos (integer). Estoque local por tenant.
+ */
+export const products = tenantSchema.table(
+  "products",
+  (t) => ({
+    id: t.uuid("id").defaultRandom().primaryKey(),
+    name: t.varchar("name", { length: 255 }).notNull(),
+    barcode: t.varchar("barcode", { length: 100 }),
+    salePriceCents: t.integer("sale_price_cents").notNull(),
+    category: t.varchar("category", { length: 100 }).notNull(),
+    currentStock: t.integer("current_stock").notNull().default(0),
+    minStock: t.integer("min_stock").notNull().default(0),
+    createdAt: t.timestamp("created_at").defaultNow().notNull(),
+    updatedAt: t.timestamp("updated_at").defaultNow().notNull(),
+  }),
+  (t) => ({
+    barcodeIdx: index("products_barcode_idx").on(t.barcode),
+    categoryIdx: index("products_category_idx").on(t.category),
+  })
+);
+
+/**
+ * Auditoria de movimentação de estoque (CAD-02).
+ */
+export const stockMovements = tenantSchema.table(
+  "stock_movements",
+  (t) => ({
+    id: t.uuid("id").defaultRandom().primaryKey(),
+    productId: t
+      .uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    quantityChange: t.integer("quantity_change").notNull(),
+    reason: t.varchar("reason", { length: 50 }).notNull(),
+    userId: t.uuid("user_id"),
+    notes: t.text("notes"),
+    createdAt: t.timestamp("created_at").defaultNow().notNull(),
+  }),
+  (t) => ({
+    productIdIdx: index("stock_movements_product_id_idx").on(t.productId),
+  })
+);
+
 // ---------------------------------------------------------------------------
 // Types utilitários derivados do schema
 // ---------------------------------------------------------------------------
@@ -136,3 +182,7 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type ArenaUser = typeof usersTenants.$inferSelect;
 export type NewArenaUser = typeof usersTenants.$inferInsert;
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+export type StockMovement = typeof stockMovements.$inferSelect;
+export type NewStockMovement = typeof stockMovements.$inferInsert;

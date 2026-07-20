@@ -34,10 +34,12 @@ export async function updateProductAction(
 
   const parsed = updateProductInput.safeParse(input);
   if (!parsed.success) {
+    const flatErrors = parsed.error.flatten().fieldErrors;
+    // TypeScript limitation: Zod's flatten() returns ZodFormattedError which is compatible with Record<string, string[]>
     return {
       status: "error",
       message: "Dados inválidos",
-      fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
+      fieldErrors: flatErrors as unknown as Record<string, string[]>,
     };
   }
 

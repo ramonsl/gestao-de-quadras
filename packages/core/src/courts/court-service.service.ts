@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { CourtService } from "@gestao-de-quadras/db/schema";
 import { assertTenantId, rows, type TenantContext } from "../db/tenant";
+import { assertCourtInTenant } from "./court.service";
 
 export interface CreateCourtServiceInput {
   courtId: string;
@@ -49,6 +50,8 @@ export async function createCourtService(
   input: CreateCourtServiceInput
 ): Promise<CourtService> {
   assertTenantId(ctx.tenantId);
+  // Anti-IDOR: o courtId vem do formulário — revalida que é do tenant da sessão.
+  await assertCourtInTenant(ctx, input.courtId);
   const result = await ctx.db.execute<CourtServiceRow>(
     sql`INSERT INTO court_services (tenant_id, court_id, service_type, base_price_in_cents)
         VALUES (${ctx.tenantId}, ${input.courtId}, ${input.serviceType}, ${input.basePriceInCents})

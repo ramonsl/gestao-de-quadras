@@ -48,6 +48,21 @@ export async function getCourtById(ctx: TenantContext, courtId: string): Promise
   return row ? toCourt(row) : null;
 }
 
+/**
+ * Garante que `courtId` (vindo de input do usuário) pertence ao tenant da sessão
+ * antes de vinculá-lo a um filho (Regra inviolável #1-b — anti-IDOR). Lança se
+ * a quadra não existir nesta arena.
+ */
+export async function assertCourtInTenant(ctx: TenantContext, courtId: string): Promise<void> {
+  assertTenantId(ctx.tenantId);
+  const result = await ctx.db.execute<{ id: string }>(
+    sql`SELECT id FROM courts WHERE id = ${courtId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  if (rows<{ id: string }>(result).length === 0) {
+    throw new Error("Quadra não encontrada nesta arena.");
+  }
+}
+
 export async function createCourt(ctx: TenantContext, input: CreateCourtInput): Promise<Court> {
   assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<CourtRow>(

@@ -34,13 +34,25 @@ describe("Court Service (serviços)", () => {
     expect(result[0].basePriceInCents).toBe(8000);
   });
 
-  it("cria serviço", async () => {
-    const result = await createCourtService(ctx([[serviceRow()]]), {
+  it("cria serviço (após validar que o court é do tenant)", async () => {
+    // 1ª query: checagem anti-IDOR (court existe no tenant) → 2ª: INSERT
+    const result = await createCourtService(ctx([[{ id: "c1" }], [serviceRow()]]), {
       courtId: "c1",
       serviceType: "rental",
       basePriceInCents: 8000,
     });
     expect(result.id).toBe("s1");
     expect(result.serviceType).toBe("rental");
+  });
+
+  it("rejeita court de outro tenant (anti-IDOR)", async () => {
+    // checagem do court não encontra nada no tenant → não insere
+    await expect(
+      createCourtService(ctx([[]]), {
+        courtId: "court-de-outro-tenant",
+        serviceType: "rental",
+        basePriceInCents: 8000,
+      })
+    ).rejects.toThrow(/não encontrada nesta arena/i);
   });
 });

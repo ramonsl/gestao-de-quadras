@@ -37,8 +37,9 @@ describe("Court Time Slot Service", () => {
     expect(result[0].priceInCents).toBe(12000);
   });
 
-  it("cria faixa horária", async () => {
-    const result = await createCourtTimeSlot(ctx([[slotRow()]]), {
+  it("cria faixa horária (após validar que o court é do tenant)", async () => {
+    // 1ª query: checagem anti-IDOR (court existe no tenant) → 2ª: INSERT
+    const result = await createCourtTimeSlot(ctx([[{ id: "c1" }], [slotRow()]]), {
       courtId: "c1",
       dayOfWeek: 0,
       startTimeHHMM: "18:00",
@@ -48,5 +49,18 @@ describe("Court Time Slot Service", () => {
     });
     expect(result.id).toBe("ts1");
     expect(result.dayOfWeek).toBe(0);
+  });
+
+  it("rejeita court de outro tenant (anti-IDOR)", async () => {
+    await expect(
+      createCourtTimeSlot(ctx([[]]), {
+        courtId: "court-de-outro-tenant",
+        dayOfWeek: 0,
+        startTimeHHMM: "18:00",
+        endTimeHHMM: "19:00",
+        durationMinutes: 60,
+        priceInCents: 12000,
+      })
+    ).rejects.toThrow(/não encontrada nesta arena/i);
   });
 });

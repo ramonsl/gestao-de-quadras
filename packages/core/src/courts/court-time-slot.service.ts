@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { CourtTimeSlot } from "@gestao-de-quadras/db/schema";
 import { assertTenantId, rows, type TenantContext } from "../db/tenant";
+import { assertCourtInTenant } from "./court.service";
 
 export interface CreateCourtTimeSlotInput {
   courtId: string;
@@ -58,6 +59,8 @@ export async function createCourtTimeSlot(
   input: CreateCourtTimeSlotInput
 ): Promise<CourtTimeSlot> {
   assertTenantId(ctx.tenantId);
+  // Anti-IDOR: o courtId vem do formulário — revalida que é do tenant da sessão.
+  await assertCourtInTenant(ctx, input.courtId);
   const result = await ctx.db.execute<CourtTimeSlotRow>(
     sql`INSERT INTO court_time_slots
           (tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents)

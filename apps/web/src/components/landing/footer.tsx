@@ -33,12 +33,12 @@ export function LandingFooter() {
                 </a>
               </li>
               <li>
-                <a href="#pdv" className="hover:text-white transition-colors">
+                <a href="#demo" className="hover:text-white transition-colors">
                   PDV & Comandas do Bar
                 </a>
               </li>
               <li>
-                <a href="#crm" className="hover:text-white transition-colors">
+                <a href="#demo" className="hover:text-white transition-colors">
                   Clube de Filiação & Cashback
                 </a>
               </li>

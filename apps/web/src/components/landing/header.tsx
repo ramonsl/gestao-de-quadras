@@ -23,9 +23,9 @@ export function LandingHeader({ isLoggedIn = false }: LandingHeaderProps) {
 
   const navLinks = [
     { label: "Recursos", href: "#recursos" },
-    { label: "Grade Interativa", href: "#grade" },
-    { label: "PDV & Comandas", href: "#pdv" },
-    { label: "Fidelidade & CRM", href: "#crm" },
+    { label: "Grade Interativa", href: "#demo" },
+    { label: "PDV & Comandas", href: "#demo" },
+    { label: "Fidelidade & CRM", href: "#demo" },
     { label: "Planos", href: "#planos" },
     { label: "FAQ", href: "#faq" },
   ];

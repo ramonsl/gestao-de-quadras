@@ -183,7 +183,9 @@ export function LandingPricing() {
 
                 <div className="space-y-3 pt-4 border-t border-[var(--border-soft)]">
                   <a
-                    href="#contact"
+                    href={`mailto:suporte@marcouarena.com.br?subject=${encodeURIComponent(
+                      `Quero testar o plano ${plan.name}`
+                    )}`}
                     className={`w-full inline-flex justify-center items-center py-3 px-4 text-sm font-bold rounded-[var(--radius-button)] shadow-xs transition-colors ${
                       plan.highlight
                         ? "bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"

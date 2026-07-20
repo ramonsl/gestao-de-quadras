@@ -1,36 +1,19 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import { arenaContext } from "@/lib/session";
+import { requireSession, arenaContext } from "@/lib/session";
 import { getCourtsByTenant } from "@gestao-de-quadras/core/courts/court.service";
 import { getCourtServices } from "@gestao-de-quadras/core/courts/court-service.service";
 import type { CourtService } from "@gestao-de-quadras/db/schema";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-const SERVICE_LABELS = {
-  rental: "Locação",
+const SERVICE_LABELS: Record<string, string> = {
+  rental: "Locação de Quadra",
   single_class: "Aula Avulsa",
-  package: "Pacote",
+  package: "Pacote de Aulas",
 };
 
-function formatCurrency(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
 export default async function ServicosQuadrasPage() {
-  const session = await auth();
-  if (!session?.user) {
-    redirect("/login");
-  }
+  const session = await requireSession();
+  const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
 
-  if (!["admin", "gerente"].includes(session.user.role ?? "")) {
-    redirect("/dashboard");
-  }
-
-  const ctx = arenaContext(session.user);
   const courts = await getCourtsByTenant(ctx);
 
   const servicesMap = new Map<string, CourtService[]>();
@@ -40,62 +23,76 @@ export default async function ServicosQuadrasPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Serviços das Quadras</h1>
-        <Link href="/admin/servicos-quadras/novo">
-          <Button>Novo Serviço</Button>
+    <>
+      <header className="h-14 shrink-0 px-[22px] flex items-center justify-between bg-white border-b border-[var(--border)]">
+        <h1 className="text-base font-semibold text-[var(--text-1)]">Serviços de Quadra</h1>
+        <Link
+          href="/admin/servicos-quadras/novo"
+          className="inline-flex items-center h-9 px-4 text-sm font-semibold text-white rounded-[var(--radius-button)] transition-colors duration-[180ms]"
+          style={{ backgroundColor: "var(--accent)" }}
+        >
+          Novo serviço
         </Link>
-      </div>
+      </header>
 
-      {courts.length === 0 ? (
-        <div className="text-center text-gray-500">
-          <p>Cadastre quadras primeiro</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {courts.map((court) => {
-            const services = servicesMap.get(court.id) || [];
-            return (
-              <div key={court.id} className="border rounded-lg p-4">
-                <h2 className="text-xl font-semibold mb-4">{court.name}</h2>
-                {services.length === 0 ? (
-                  <p className="text-gray-500 text-sm">Nenhum serviço cadastrado</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+      <main className="flex-1 min-h-0 overflow-auto p-[22px] space-y-4">
+        <p className="text-[11px] text-[var(--text-3)]">
+          Tipos de serviço e tarifas base configuradas por quadra (CAD-04).
+        </p>
+
+        {courts.length === 0 ? (
+          <div className="bg-white border border-[var(--border)] rounded-[var(--radius-card)] p-8 text-center text-sm text-[var(--text-3)]">
+            Cadastre quadras primeiro para adicionar serviços.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {courts.map((court) => {
+              const services = servicesMap.get(court.id) || [];
+              return (
+                <div
+                  key={court.id}
+                  className="bg-white border border-[var(--border)] rounded-[var(--radius-card)] overflow-hidden"
+                >
+                  <div className="px-4 py-3 bg-[var(--bg-sunken)] border-b border-[var(--border)] font-medium text-sm text-[var(--text-1)] flex items-center justify-between">
+                    <span>{court.name}</span>
+                    <span className="text-xs uppercase text-[var(--text-3)]">{court.modality}</span>
+                  </div>
+
+                  {services.length === 0 ? (
+                    <div className="p-4 text-xs text-[var(--text-3)] text-center">
+                      Nenhum serviço cadastrado nesta quadra.
+                    </div>
+                  ) : (
+                    <table className="w-full text-[12.5px]">
                       <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 px-3">Tipo</th>
-                          <th className="text-right py-2 px-3">Preço Base</th>
-                          <th className="text-center py-2 px-3">Ações</th>
+                        <tr className="text-left text-overline text-[var(--text-3)] border-b border-[var(--border)]">
+                          <th className="px-4 py-2.5">SERVIÇO</th>
+                          <th className="px-4 py-2.5">PREÇO BASE</th>
                         </tr>
                       </thead>
                       <tbody>
                         {services.map((service) => (
-                          <tr key={service.id} className="border-b hover:bg-gray-50">
-                            <td className="py-2 px-3">
-                              {SERVICE_LABELS[service.serviceType as keyof typeof SERVICE_LABELS]}
+                          <tr
+                            key={service.id}
+                            className="border-b border-[var(--border-soft)] last:border-0 hover:bg-[var(--bg-sunken)] transition-colors"
+                          >
+                            <td className="px-4 py-3 font-medium text-[var(--text-1)]">
+                              {SERVICE_LABELS[service.serviceType] || service.serviceType}
                             </td>
-                            <td className="text-right py-2 px-3">
-                              {formatCurrency(service.basePriceInCents)}
-                            </td>
-                            <td className="text-center py-2 px-3">
-                              <Button variant="outline" size="sm">
-                                Editar
-                              </Button>
+                            <td className="px-4 py-3 font-semibold text-[var(--text-1)]">
+                              R$ {(service.basePriceInCents / 100).toFixed(2).replace(".", ",")}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </>
   );
 }

@@ -1,29 +1,38 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import { arenaContext } from "@/lib/session";
+import { requireSession, arenaContext } from "@/lib/session";
 import { listProducts, getProductsWithLowStock } from "@gestao-de-quadras/core/product";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ProductsList } from "@/components/products/products-list";
 import { LowStockAlert } from "@/components/products/low-stock-alert";
 
 export default async function ProdutosPage() {
-  const s = await auth();
-  if (!s?.user) redirect("/login");
-  if (!["admin", "gerente"].includes(s.user.role ?? "")) redirect("/dashboard");
+  const session = await requireSession();
+  const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
 
-  const ctx = arenaContext(s.user);
-  const all = await listProducts({}, ctx);
-  const low = await getProductsWithLowStock(ctx);
+  const products = await listProducts({}, ctx);
+  const lowStockProducts = await getProductsWithLowStock(ctx);
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Produtos</h1>
-        <Link href="/admin/produtos/novo"><Button>Novo</Button></Link>
-      </div>
-      {low.length > 0 && <LowStockAlert products={low} />}
-      <ProductsList products={all} />
-    </div>
+    <>
+      <header className="h-14 shrink-0 px-[22px] flex items-center justify-between bg-white border-b border-[var(--border)]">
+        <h1 className="text-base font-semibold text-[var(--text-1)]">Produtos</h1>
+        <Link
+          href="/admin/produtos/novo"
+          className="inline-flex items-center h-9 px-4 text-sm font-semibold text-white rounded-[var(--radius-button)] transition-colors duration-[180ms]"
+          style={{ backgroundColor: "var(--accent)" }}
+        >
+          Novo produto
+        </Link>
+      </header>
+
+      <main className="flex-1 min-h-0 overflow-auto p-[22px] space-y-4">
+        <p className="text-[11px] text-[var(--text-3)]">
+          Catálogo de produtos da copa, artigos esportivos e controle de estoque (CAD-02).
+        </p>
+
+        {lowStockProducts.length > 0 && <LowStockAlert products={lowStockProducts} />}
+
+        <ProductsList products={products} />
+      </main>
+    </>
   );
 }

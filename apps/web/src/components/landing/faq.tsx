@@ -12,14 +12,19 @@ export function LandingFAQ() {
 
   const faqItems: FAQItem[] = [
     {
+      question: "Como os Rankings do Clube e Torneios ajudam a aumentar o faturamento?",
+      answer:
+        "O maior desafio de uma arena é manter os horários ocupados. Com o Ranking do Clube e Torneios, os atletas competem entre si, disputam pontos a cada partida e agendam jogos com muito mais frequência durante a semana. Isso gera receita recorrente de locações e aumenta exponencialmente o consumo no bar.",
+    },
+    {
       question: "Preciso instalar algum programa ou comprar computador especial?",
       answer:
         "Não! O Marcou Arena é 100% em nuvem e funciona em qualquer computador, tablet (iPad/Android) ou celular com navegador moderno. Você pode operar o caixa no balcão e conferir relatórios de onde estiver.",
     },
     {
-      question: "Como funciona a integração com o WhatsApp para lembretes?",
+      question: "Como funciona a integração com o WhatsApp para lembretes e rodadas?",
       answer:
-        "O sistema possui automação para envio de mensagens. Ele dispara automaticamente lembretes 2h antes do jogo, mensagens de parabéns com voucher no aniversário e convites de reativação para atletas que não jogam há mais de 15 dias.",
+        "O sistema possui automação para envio de mensagens. Ele dispara automaticamente lembretes 2h antes do jogo, convocações para rodadas de ranking, parabéns no aniversário e avisos de novos torneios.",
     },
     {
       question: "Os dados da minha arena estão seguros e isolados de outros concorrentes?",
@@ -30,11 +35,6 @@ export function LandingFAQ() {
       question: "O que acontece se eu mudar os preços do bar? Afeta comandas abertas?",
       answer:
         "Não afeta. O Marcou Arena grava o preço exato do item no momento em que ele é lançado na comanda. Assim, o valor histórico da venda permanece protegido mesmo se o preço no cardápio for alterado no futuro.",
-    },
-    {
-      question: "Como funciona a cobrança das mensalidades do Clube de Filiação?",
-      answer:
-        "Você configura os planos (ex: Ouro, Prata, Bronze) e o sistema gera as cobranças recorrentes de forma automática via PIX ou cartão de crédito. Os filiados ganham descontos automáticos no balcão.",
     },
     {
       question: "Posso testar gratuitamente antes de contratar?",
@@ -54,7 +54,7 @@ export function LandingFAQ() {
             Perguntas Frequentes
           </h2>
           <p className="text-base text-[var(--text-2)]">
-            Tudo o que você precisa saber sobre a implantação e segurança do Marcou Arena.
+            Tudo o que você precisa saber sobre a implantação, torneios e fidelização no Marcou Arena.
           </p>
         </div>
 

@@ -14,15 +14,15 @@ export function LandingHero() {
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-[var(--radius-pill)] bg-[var(--accent-tint)] border border-[var(--border-soft)]">
             <span className="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse" />
             <span className="text-overline tracking-wider text-[var(--accent)] font-bold">
-              SISTEMA COMPLETO DE GESTÃO PARA ARENAS ESPORTIVAS
+              SISTEMA DE GESTÃO & FIDELIZAÇÃO DE ATLETAS
             </span>
           </div>
 
           {/* Main Headline */}
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-[var(--text-1)] tracking-tight leading-tight">
-            Gerencie quadras, bar, filiação e caixa da sua arena com{" "}
+            Gerencie quadras, bar, torneios e rankings com{" "}
             <span className="text-[var(--accent)] underline decoration-[var(--accent-bright)] decoration-wavy decoration-2">
-              faturamento máximo
+              faturamento e fidelização máxima
             </span>
             .
           </h1>
@@ -36,16 +36,15 @@ export function LandingHero() {
 
           {/* Subheadline */}
           <p className="text-base sm:text-xl text-[var(--text-2)] max-w-3xl mx-auto leading-relaxed">
-            O software ideal para Arenas Esportivas e Complexos de Quadras (Padel,
-            Beach Tennis, Saibro, Society, Pickleball e mais). Grade de reservas
-            sem conflito, comandas de PDV com controle financeiro, clube de benefícios
-            e atendimento automatizado no WhatsApp.
+            Muito além do simples agendamento: organize torneios com chaves automáticas,
+            crie rankings de clube para manter os atletas jogando toda semana,
+            acelere o bar com comandas e fidelize com cashback no WhatsApp.
           </p>
 
           {/* Microcopy Signature Rule */}
           <div className="inline-block bg-white/80 backdrop-blur-xs px-4 py-2 rounded-[var(--radius-card)] border border-[var(--border)]">
             <p className="text-rule text-center">
-              🔒 Dados 100% seguros e isolados · ⚡ Lançamentos rápidos no caixa · 💬 Lembretes automáticos no WhatsApp
+              🏆 Criação de Torneios & Rankings de Clube · 📈 Retenção e engajamento constante de atletas · 🔒 Dados 100% seguros
             </p>
           </div>
 
@@ -125,11 +124,11 @@ export function LandingHero() {
             </div>
 
             <div className="bg-white p-4 rounded-[var(--radius-card)] border border-[var(--border)] shadow-xs">
-              <span className="text-kpi text-[var(--text-1)] block">0</span>
+              <span className="text-kpi text-[var(--text-1)] block">+45%</span>
               <span className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wide">
-                Conflitos de Reserva
+                Retenção de Atletas
               </span>
-              <p className="text-rule mt-1">Sincronização instantânea</p>
+              <p className="text-rule mt-1">Com rankings e torneios ativos</p>
             </div>
           </div>
         </div>

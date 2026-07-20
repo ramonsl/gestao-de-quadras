@@ -197,6 +197,99 @@ export const customerOptInLgpd = tenantSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// Quadras, Serviços e Aulas (CAD-03, CAD-05)
+// ---------------------------------------------------------------------------
+
+export const courts = tenantSchema.table(
+  "courts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    modality: varchar("modality", { length: 50 }).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    modalityIdx: index("courts_modality_idx").on(t.modality),
+    isActiveIdx: index("courts_is_active_idx").on(t.isActive),
+  })
+);
+
+export const courtServices = tenantSchema.table(
+  "court_services",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    courtId: uuid("court_id").notNull(),
+    serviceType: varchar("service_type", { length: 50 }).notNull(),
+    basePriceInCents: integer("base_price_in_cents").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    courtIdIdx: index("court_services_court_id_idx").on(t.courtId),
+    serviceTypeIdx: index("court_services_service_type_idx").on(t.serviceType),
+  })
+);
+
+export const courtTimeSlots = tenantSchema.table(
+  "court_time_slots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    courtId: uuid("court_id").notNull(),
+    dayOfWeek: integer("day_of_week").notNull(),
+    startTimeHHMM: varchar("start_time_hhmm", { length: 5 }).notNull(),
+    endTimeHHMM: varchar("end_time_hhmm", { length: 5 }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    priceInCents: integer("price_in_cents").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    courtIdIdx: index("court_time_slots_court_id_idx").on(t.courtId),
+    dayOfWeekIdx: index("court_time_slots_day_of_week_idx").on(t.dayOfWeek),
+  })
+);
+
+export const classPackages = tenantSchema.table(
+  "class_packages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 100 }).notNull(),
+    totalClassCount: integer("total_class_count").notNull(),
+    priceInCents: integer("price_in_cents").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    isActiveIdx: index("class_packages_is_active_idx").on(t.isActive),
+  })
+);
+
+export const studentClassBalance = tenantSchema.table(
+  "student_class_balance",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    globalCustomerId: uuid("global_customer_id").notNull(),
+    classPackageId: uuid("class_package_id").notNull(),
+    remainingClasses: integer("remaining_classes").notNull(),
+    purchasedAt: timestamp("purchased_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    globalCustomerIdIdx: index("student_class_balance_global_customer_id_idx").on(
+      t.globalCustomerId
+    ),
+    classPackageIdIdx: index("student_class_balance_class_package_id_idx").on(
+      t.classPackageId
+    ),
+  })
+);
+
+// ---------------------------------------------------------------------------
 // Types utilitários derivados do schema
 // ---------------------------------------------------------------------------
 
@@ -212,3 +305,13 @@ export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type CustomerOptInLgpd = typeof customerOptInLgpd.$inferSelect;
 export type NewCustomerOptInLgpd = typeof customerOptInLgpd.$inferInsert;
+export type Court = typeof courts.$inferSelect;
+export type NewCourt = typeof courts.$inferInsert;
+export type CourtService = typeof courtServices.$inferSelect;
+export type NewCourtService = typeof courtServices.$inferInsert;
+export type CourtTimeSlot = typeof courtTimeSlots.$inferSelect;
+export type NewCourtTimeSlot = typeof courtTimeSlots.$inferInsert;
+export type ClassPackage = typeof classPackages.$inferSelect;
+export type NewClassPackage = typeof classPackages.$inferInsert;
+export type StudentClassBalance = typeof studentClassBalance.$inferSelect;
+export type NewStudentClassBalance = typeof studentClassBalance.$inferInsert;

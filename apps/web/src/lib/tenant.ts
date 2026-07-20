@@ -3,31 +3,32 @@ import { eq } from "drizzle-orm";
 import { db, tenants } from "@gestao-de-quadras/db";
 
 /**
- * Resolve o slug do tenant a partir do Host da requisição — mesma regra do
- * middleware. É a ÚNICA fonte confiável: o slug nunca deve vir do formulário
- * (o cliente controla o corpo) nem de `NEXT_PUBLIC_*` (inlinado em build time,
- * o que fixaria uma única arena por build).
+ * Resolve o slug do tenant a partir do Host da requisição ou fallback de env.
+ * Em produção com subdomínios (ex.: arena.sistema.com.br), extrai "arena".
+ * Em homologação/VPS sem subdomínio próprio, utiliza a env TENANT_SLUG.
  */
 export async function resolveTenantSlugFromHost(): Promise<string | null> {
   const headerList = await headers();
   const host = headerList.get("host") ?? "";
 
   const baseDomain = process.env.BASE_DOMAIN ?? "sistema.com.br";
-  if (host.endsWith(`.${baseDomain}`)) {
-    return host.replace(`.${baseDomain}`, "") || null;
+  if (host.includes(`.${baseDomain}`)) {
+    const parts = host.split(`.${baseDomain}`)[0];
+    if (parts && parts !== host) {
+      return parts;
+    }
   }
 
-  // Fora de produção aceita-se a env fixa para desenvolvimento local
-  if (process.env.NODE_ENV !== "production") {
-    return process.env.TENANT_SLUG ?? null;
+  // Fallback para TENANT_SLUG (útil em dev, staging/homologação via IP ou sslip.io)
+  if (process.env.TENANT_SLUG) {
+    return process.env.TENANT_SLUG;
   }
 
   return null;
 }
 
 /**
- * Resolve o tenant (slug + id + name) a partir do Host. Row-level exige o
- * `tenant_id` (UUID) — retorna null se o Host não mapear uma arena existente.
+ * Resolve o tenant (slug + id + name) a partir do Host.
  */
 export async function resolveTenantFromHost(): Promise<
   { slug: string; id: string; name: string } | null

@@ -7,6 +7,13 @@ import {
   searchCustomersForPdv,
 } from "./customer.service";
 
+/**
+ * Envolve um mock com o shape do drizzle (`.select`/`.insert`) como um
+ * TenantDbClient: `executeInTenant` apenas repassa o mock como `tx`.
+ */
+const tenant = (tx: any) =>
+  ({ executeInTenant: (fn: any) => fn(tx) }) as any;
+
 describe("Customer Service", () => {
   describe("WhatsappSchema Validation", () => {
     it("aceita WhatsApp válido Brasil +55", () => {
@@ -46,7 +53,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await findOrCreateGlobalCustomer(mockDb, "+5511999999999");
+      const result = await findOrCreateGlobalCustomer(tenant(mockDb), "+5511999999999");
       expect(result.found).toBe(false);
     });
 
@@ -72,7 +79,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await findOrCreateGlobalCustomer(mockDb, "+5511999999999");
+      const result = await findOrCreateGlobalCustomer(tenant(mockDb), "+5511999999999");
       expect(result.found).toBe(true);
       expect(result.customer.name).toBe("João");
     });
@@ -89,7 +96,7 @@ describe("Customer Service", () => {
       };
 
       await expect(
-        findOrCreateGlobalCustomer(mockDb, "invalid-whatsapp")
+        findOrCreateGlobalCustomer(tenant(mockDb), "invalid-whatsapp")
       ).rejects.toThrow();
     });
   });
@@ -115,7 +122,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await createGlobalCustomer(mockDb, {
+      const result = await createGlobalCustomer(tenant(mockDb), {
         whatsapp: "+5511999999999",
         name: "Maria Silva",
         email: "maria@email.com",
@@ -147,7 +154,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await createGlobalCustomer(mockDb, {
+      const result = await createGlobalCustomer(tenant(mockDb), {
         whatsapp: "+5511988888888",
         name: "Carlos",
       });
@@ -180,7 +187,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await createCustomerInTenant(mockDb, {
+      const result = await createCustomerInTenant(tenant(mockDb), {
         globalCustomerId: "global-1",
         whatsapp: "+5511999999999",
         name: "Maria Silva",
@@ -216,7 +223,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await createCustomerInTenant(mockDb, {
+      const result = await createCustomerInTenant(tenant(mockDb), {
         whatsapp: "+5511977777777",
         name: "Ana",
         createdByUserId: "user-gerente",
@@ -239,7 +246,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await searchCustomersForPdv(mockDb, "");
+      const result = await searchCustomersForPdv(tenant(mockDb), "");
       expect(result).toEqual([]);
     });
 
@@ -265,7 +272,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await searchCustomersForPdv(mockDb, "maria");
+      const result = await searchCustomersForPdv(tenant(mockDb), "maria");
       expect(result.length).toBe(2);
       expect(result[0].name).toContain("Maria");
     });
@@ -287,7 +294,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      const result = await searchCustomersForPdv(mockDb, "+5511999999999");
+      const result = await searchCustomersForPdv(tenant(mockDb), "+5511999999999");
       expect(result.length).toBe(1);
       expect(result[0].whatsapp).toBe("+5511999999999");
     });
@@ -306,7 +313,7 @@ describe("Customer Service", () => {
         }),
       };
 
-      await searchCustomersForPdv(mockDb, "test");
+      await searchCustomersForPdv(tenant(mockDb), "test");
     });
   });
 });

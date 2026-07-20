@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { and, eq, ilike } from "drizzle-orm";
+import { eq, ilike } from "drizzle-orm";
 import { globalCustomers, customers } from "@gestao-de-quadras/db/schema";
-import { TenantDb } from "../test/test-db";
+import type { TenantDbClient } from "@gestao-de-quadras/db";
 
 const WHATSAPP_E164_REGEX = /^\+(?:[0-9] ?){6,14}[0-9]$/;
 
@@ -23,7 +23,8 @@ export interface GlobalCustomer {
   whatsapp: string;
   name: string;
   email: string | null;
-  birthDate: Date | null;
+  /** Coluna `date` do Postgres — o driver retorna string ISO (YYYY-MM-DD). */
+  birthDate: string | null;
   photoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -35,24 +36,31 @@ export interface LocalCustomer {
   whatsapp: string;
   name: string;
   email: string | null;
-  birthDate: Date | null;
+  birthDate: string | null;
   status: string;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
+/** Converte Date → 'YYYY-MM-DD' para colunas `date` do Postgres. */
+function toDateColumn(value: Date | null | undefined): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
 export async function findOrCreateGlobalCustomer(
-  db: any,
+  db: TenantDbClient,
   whatsapp: string
 ): Promise<{ found: boolean; customer: GlobalCustomer }> {
   const validated = WhatsappSchema.parse(whatsapp);
 
-  const existing = await db
-    .select()
-    .from(globalCustomers)
-    .where(eq(globalCustomers.whatsapp, validated))
-    .limit(1);
+  const existing = await db.executeInTenant((tx) =>
+    tx
+      .select()
+      .from(globalCustomers)
+      .where(eq(globalCustomers.whatsapp, validated))
+      .limit(1)
+  );
 
   if (existing.length > 0) {
     return { found: true, customer: existing[0] as GlobalCustomer };
@@ -62,26 +70,28 @@ export async function findOrCreateGlobalCustomer(
 }
 
 export async function createGlobalCustomer(
-  db: any,
+  db: TenantDbClient,
   input: CreateGlobalCustomerInput
 ): Promise<GlobalCustomer> {
   const validated = CreateGlobalCustomerInputSchema.parse(input);
 
-  const result = await db
-    .insert(globalCustomers)
-    .values({
-      whatsapp: validated.whatsapp,
-      name: validated.name,
-      email: validated.email || null,
-      birthDate: validated.birthDate || null,
-    })
-    .returning();
+  const result = await db.executeInTenant((tx) =>
+    tx
+      .insert(globalCustomers)
+      .values({
+        whatsapp: validated.whatsapp,
+        name: validated.name,
+        email: validated.email || null,
+        birthDate: toDateColumn(validated.birthDate),
+      })
+      .returning()
+  );
 
   return result[0] as GlobalCustomer;
 }
 
 export async function createCustomerInTenant(
-  db: TenantDb,
+  db: TenantDbClient,
   input: {
     globalCustomerId?: string;
     whatsapp: string;
@@ -91,36 +101,36 @@ export async function createCustomerInTenant(
     createdByUserId: string;
   }
 ): Promise<LocalCustomer> {
-  const result = await db
-    .insert(customers)
-    .values({
-      globalCustomerId: input.globalCustomerId,
-      whatsapp: input.whatsapp,
-      name: input.name,
-      email: input.email,
-      birthDate: input.birthDate,
-      createdByUserId: input.createdByUserId,
-    })
-    .returning();
+  const result = await db.executeInTenant((tx) =>
+    tx
+      .insert(customers)
+      .values({
+        globalCustomerId: input.globalCustomerId,
+        whatsapp: input.whatsapp,
+        name: input.name,
+        email: input.email,
+        birthDate: toDateColumn(input.birthDate),
+        createdByUserId: input.createdByUserId,
+      })
+      .returning()
+  );
 
   return result[0] as LocalCustomer;
 }
 
 export async function getCustomerById(
-  db: TenantDb,
+  db: TenantDbClient,
   customerId: string
 ): Promise<LocalCustomer | null> {
-  const result = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.id, customerId))
-    .limit(1);
+  const result = await db.executeInTenant((tx) =>
+    tx.select().from(customers).where(eq(customers.id, customerId)).limit(1)
+  );
 
-  return result[0] as LocalCustomer | null;
+  return (result[0] as LocalCustomer) ?? null;
 }
 
 export async function searchCustomersForPdv(
-  db: TenantDb,
+  db: TenantDbClient,
   query: string
 ): Promise<LocalCustomer[]> {
   if (!query || query.length < 2) {
@@ -129,34 +139,39 @@ export async function searchCustomersForPdv(
 
   const searchTerm = `%${query}%`;
 
-  const result = await db
-    .select()
-    .from(customers)
-    .where(
-      query.startsWith("+")
-        ? eq(customers.whatsapp, query)
-        : ilike(customers.name, searchTerm)
-    )
-    .limit(10);
+  const result = await db.executeInTenant((tx) =>
+    tx
+      .select()
+      .from(customers)
+      .where(
+        query.startsWith("+")
+          ? eq(customers.whatsapp, query)
+          : ilike(customers.name, searchTerm)
+      )
+      .limit(10)
+  );
 
   return result as LocalCustomer[];
 }
 
-export async function getCustomersByTenant(db: TenantDb): Promise<LocalCustomer[]> {
-  const result = await db.select().from(customers).orderBy(customers.name);
+export async function getCustomersByTenant(
+  db: TenantDbClient
+): Promise<LocalCustomer[]> {
+  const result = await db.executeInTenant((tx) =>
+    tx.select().from(customers).orderBy(customers.name)
+  );
   return result as LocalCustomer[];
 }
 
 export async function updateCustomer(
-  db: TenantDb,
+  db: TenantDbClient,
   customerId: string,
   updates: Partial<Omit<LocalCustomer, "id" | "createdAt" | "createdByUserId">>
 ): Promise<void> {
-  await db
-    .update(customers)
-    .set({
-      ...updates,
-      updatedAt: new Date(),
-    })
-    .where(eq(customers.id, customerId));
+  await db.executeInTenant((tx) =>
+    tx
+      .update(customers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(customers.id, customerId))
+  );
 }

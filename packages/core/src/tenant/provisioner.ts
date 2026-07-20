@@ -94,6 +94,146 @@ export async function provisionNewTenant(input: ProvisionInput) {
     )
   `);
 
+  // 3b. Tabelas de negócio do tenant (CAD-01/02/03). Espelham `tenant_template`
+  //     do schema.ts, mas criadas no schema físico da arena (Regra inviolável #1).
+  const t = (name: string) =>
+    sql`${sql.identifier(schemaName)}.${sql.identifier(name)}`;
+
+  // CAD-01: Clientes locais + consentimento LGPD
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("customers")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "global_customer_id" uuid,
+      "whatsapp" varchar(15) NOT NULL,
+      "name" varchar(100) NOT NULL,
+      "email" varchar(255),
+      "birth_date" date,
+      "status" varchar(20) DEFAULT 'active' NOT NULL,
+      "created_by_user_id" uuid NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("customers_whatsapp_unique")} ON ${t("customers")} ("whatsapp")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("customers_global_id_idx")} ON ${t("customers")} ("global_customer_id")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("customers_name_idx")} ON ${t("customers")} ("name")`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("customer_opt_in_lgpd")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "customer_id" uuid NOT NULL,
+      "opt_in" boolean DEFAULT false NOT NULL,
+      "opt_in_at" timestamp,
+      "opt_out_at" timestamp,
+      "changed_by_user_id" uuid,
+      "changed_at" timestamp DEFAULT now() NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("customer_opt_in_lgpd_customer_id_unique")} ON ${t("customer_opt_in_lgpd")} ("customer_id")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("customer_opt_in_lgpd_opt_in_idx")} ON ${t("customer_opt_in_lgpd")} ("opt_in")`);
+
+  // CAD-02: Produtos da copa + movimentação de estoque
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("products")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "name" varchar(255) NOT NULL,
+      "barcode" varchar(100),
+      "sale_price_cents" integer NOT NULL,
+      "category" varchar(100) NOT NULL,
+      "current_stock" integer DEFAULT 0 NOT NULL,
+      "min_stock" integer DEFAULT 0 NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("products_barcode_idx")} ON ${t("products")} ("barcode")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("products_category_idx")} ON ${t("products")} ("category")`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("stock_movements")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "product_id" uuid NOT NULL REFERENCES ${t("products")}("id") ON DELETE CASCADE,
+      "quantity_change" integer NOT NULL,
+      "reason" varchar(50) NOT NULL,
+      "user_id" uuid,
+      "notes" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("stock_movements_product_id_idx")} ON ${t("stock_movements")} ("product_id")`);
+
+  // CAD-03: Quadras, serviços, faixas horárias, pacotes e saldo de aulas
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("courts")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "name" varchar(100) NOT NULL,
+      "modality" varchar(50) NOT NULL,
+      "is_active" boolean DEFAULT true NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("courts_modality_idx")} ON ${t("courts")} ("modality")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("courts_is_active_idx")} ON ${t("courts")} ("is_active")`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("court_services")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "court_id" uuid NOT NULL,
+      "service_type" varchar(50) NOT NULL,
+      "base_price_in_cents" integer NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("court_services_court_id_idx")} ON ${t("court_services")} ("court_id")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("court_services_service_type_idx")} ON ${t("court_services")} ("service_type")`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("court_time_slots")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "court_id" uuid NOT NULL,
+      "day_of_week" integer NOT NULL,
+      "start_time_hhmm" varchar(5) NOT NULL,
+      "end_time_hhmm" varchar(5) NOT NULL,
+      "duration_minutes" integer NOT NULL,
+      "price_in_cents" integer NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("court_time_slots_court_id_idx")} ON ${t("court_time_slots")} ("court_id")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("court_time_slots_day_of_week_idx")} ON ${t("court_time_slots")} ("day_of_week")`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("class_packages")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "name" varchar(100) NOT NULL,
+      "total_class_count" integer NOT NULL,
+      "price_in_cents" integer NOT NULL,
+      "is_active" boolean DEFAULT true NOT NULL,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("class_packages_is_active_idx")} ON ${t("class_packages")} ("is_active")`);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS ${t("student_class_balance")} (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "global_customer_id" uuid NOT NULL,
+      "class_package_id" uuid NOT NULL,
+      "remaining_classes" integer NOT NULL,
+      "purchased_at" timestamp DEFAULT now() NOT NULL,
+      "expires_at" timestamp,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("student_class_balance_global_customer_id_idx")} ON ${t("student_class_balance")} ("global_customer_id")`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS ${sql.identifier("student_class_balance_class_package_id_idx")} ON ${t("student_class_balance")} ("class_package_id")`);
+
   // 4. Insere o operador Admin inicial no schema do tenant (já ativo).
   //    Admin tem acesso irrestrito; modulesAllowed recebe todos os módulos.
   const allModules = JSON.stringify([...MODULES]);

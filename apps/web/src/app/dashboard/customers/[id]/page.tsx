@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { getCustomerById } from "@gestao-de-quadras/core/customers/customer.service";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -19,8 +19,8 @@ export default async function CustomerDetailPage({
     redirect("/dashboard");
   }
 
-  const tenantDb = getTenantDb(session.user.tenantSlug!);
-  const customer = await getCustomerById(tenantDb, params.id);
+  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const customer = await getCustomerById(ctx, params.id);
 
   if (!customer) {
     redirect("/dashboard/customers");

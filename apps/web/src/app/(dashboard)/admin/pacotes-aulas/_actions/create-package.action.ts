@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { createClassPackage } from "@gestao-de-quadras/core/classes/class-package.service";
 import { z } from "zod";
 
@@ -37,8 +37,8 @@ export async function createPackageAction(formData: FormData) {
   }
 
   try {
-    const tenantDb = getTenantDb(session.user.tenantSlug!);
-    const classPackage = await createClassPackage(tenantDb, {
+    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const classPackage = await createClassPackage(ctx, {
       name: result.data.name,
       totalClassCount: result.data.totalClassCount,
       priceInCents: Math.round(result.data.priceInCents * 100),

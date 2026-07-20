@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
-import { courtServices, type CourtService } from "@gestao-de-quadras/db/schema";
-import type { TenantDbClient } from "@gestao-de-quadras/db";
+import { sql } from "drizzle-orm";
+import type { CourtService } from "@gestao-de-quadras/db/schema";
+import { assertSchema, rows, tenantTable, type TenantContext } from "../db/tenant";
 
 /**
  * Serviços de quadra (CAD-03): locação, aula avulsa, pacote.
@@ -13,28 +13,50 @@ export interface CreateCourtServiceInput {
   basePriceInCents: number;
 }
 
+type CourtServiceRow = {
+  id: string;
+  court_id: string;
+  service_type: string;
+  base_price_in_cents: number;
+  created_at: Date;
+  updated_at: Date;
+};
+
+const COLUMNS = sql`id, court_id, service_type, base_price_in_cents, created_at, updated_at`;
+
+function toCourtService(row: CourtServiceRow): CourtService {
+  return {
+    id: row.id,
+    courtId: row.court_id,
+    serviceType: row.service_type,
+    basePriceInCents: row.base_price_in_cents,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export async function getCourtServices(
-  tenantDb: TenantDbClient,
+  ctx: TenantContext,
   courtId: string
 ): Promise<CourtService[]> {
-  return tenantDb.executeInTenant((tx) =>
-    tx.select().from(courtServices).where(eq(courtServices.courtId, courtId))
+  assertSchema(ctx.schemaName);
+  const result = await ctx.db.execute<CourtServiceRow>(
+    sql`SELECT ${COLUMNS} FROM ${tenantTable(ctx.schemaName, "court_services")}
+        WHERE court_id = ${courtId}`
   );
+  return rows<CourtServiceRow>(result).map(toCourtService);
 }
 
 export async function createCourtService(
-  tenantDb: TenantDbClient,
+  ctx: TenantContext,
   input: CreateCourtServiceInput
 ): Promise<CourtService> {
-  const rows = await tenantDb.executeInTenant((tx) =>
-    tx
-      .insert(courtServices)
-      .values({
-        courtId: input.courtId,
-        serviceType: input.serviceType,
-        basePriceInCents: input.basePriceInCents,
-      })
-      .returning()
+  assertSchema(ctx.schemaName);
+  const result = await ctx.db.execute<CourtServiceRow>(
+    sql`INSERT INTO ${tenantTable(ctx.schemaName, "court_services")}
+          (court_id, service_type, base_price_in_cents)
+        VALUES (${input.courtId}, ${input.serviceType}, ${input.basePriceInCents})
+        RETURNING ${COLUMNS}`
   );
-  return rows[0];
+  return toCourtService(rows<CourtServiceRow>(result)[0]);
 }

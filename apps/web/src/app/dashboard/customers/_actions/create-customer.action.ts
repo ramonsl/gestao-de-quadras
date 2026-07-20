@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import {
   findOrCreateGlobalCustomer,
   createGlobalCustomer,
@@ -47,12 +47,15 @@ export async function createCustomerAction(formData: FormData) {
   }
 
   try {
-    const dbGlobal = getTenantDb("public");
-    const dbTenant = getTenantDb(session.user.tenantSlug!);
+    const ctx = {
+      db,
+      schemaName: `tenant_${session.user.tenantSlug}`,
+      actorUserId: session.user.id,
+    };
 
-    // Buscar ou criar cliente global
+    // Buscar ou criar cliente global (schema public)
     const { found, customer: globalCustomer } = await findOrCreateGlobalCustomer(
-      dbGlobal,
+      db,
       result.data.whatsapp
     );
 
@@ -61,7 +64,7 @@ export async function createCustomerAction(formData: FormData) {
     if (found && globalCustomer.id) {
       globalCustomerId = globalCustomer.id;
     } else {
-      const newGlobal = await createGlobalCustomer(dbGlobal, {
+      const newGlobal = await createGlobalCustomer(db, {
         whatsapp: result.data.whatsapp,
         name: result.data.name,
         email: result.data.email,
@@ -73,7 +76,7 @@ export async function createCustomerAction(formData: FormData) {
     }
 
     // Criar cliente local
-    const customer = await createCustomerInTenant(dbTenant, {
+    const customer = await createCustomerInTenant(ctx, {
       globalCustomerId,
       whatsapp: result.data.whatsapp,
       name: result.data.name,

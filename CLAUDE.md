@@ -26,9 +26,20 @@ implementada sem uma US correspondente. Toda US é referenciada pelo ID
 
 ## Regras invioláveis
 
-1. **Isolamento de tenant**: toda query roda com `search_path` do tenant da sessão.
-   Nenhum acesso a dados sem tenant resolvido. Repositórios recebem `tenantDb`,
-   nunca criam conexão própria.
+1. **Isolamento de tenant — schema-por-tenant via SQL cru (MANDATÓRIO)**: toda
+   leitura/escrita de dados de tenant é feita com SQL parametrizado que qualifica
+   **explicitamente** o schema do tenant, `sql.identifier(\`tenant_<slug>\`)` — o
+   padrão já usado em `auth.service` e no `provisioner`. O `schemaName` sempre
+   passa por validação (`assertSchema`/regex) antes de entrar no SQL.
+   É **PROIBIDO** em runtime: (a) depender de `search_path` implícito;
+   (b) usar tabelas Drizzle qualificadas em `tenant_template`
+   (`pgSchema("tenant_template").table(...)`), pois o SQL gerado fixa o schema e
+   vaza dados entre arenas. O schema `tenant_template` e as migrations Drizzle
+   servem **apenas** como template/referência de estrutura. Todo schema
+   `tenant_<slug>` deve conter **todas** as tabelas do tenant — o `provisioner`
+   cria/clona a estrutura completa ao provisionar a arena. Nenhum acesso a dados
+   sem tenant resolvido; serviços recebem o `schemaName` validado, nunca criam
+   conexão própria.
 2. **Testes obrigatórios**: toda função de serviço tem teste unitário (Vitest);
    toda US tem teste e2e (Playwright) derivado dos critérios de aceite. PR sem
    teste não é aceito.

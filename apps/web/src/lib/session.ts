@@ -15,23 +15,34 @@ export interface ArenaSession {
 /** Lê a sessão do operador logado (ou null). */
 export async function getArenaSession(): Promise<ArenaSession | null> {
   const session = await auth();
-  if (!session) return null;
-  const s = session as unknown as {
-    user: { id: string };
-    tenantSlug?: string;
-    username?: string;
-    role?: string;
-    modulesAllowed?: string[];
-    mustChangePassword?: boolean;
-  };
-  if (!s.tenantSlug || !s.role) return null;
+  const u = session?.user;
+  if (!u?.tenantSlug || !u?.role) return null;
   return {
-    userId: s.user.id,
-    username: s.username ?? "",
-    tenantSlug: s.tenantSlug,
-    role: s.role as ArenaSession["role"],
-    modulesAllowed: s.modulesAllowed ?? [],
-    mustChangePassword: s.mustChangePassword ?? false,
+    userId: u.id,
+    username: u.username ?? "",
+    tenantSlug: u.tenantSlug,
+    role: u.role as ArenaSession["role"],
+    modulesAllowed: u.modulesAllowed ?? [],
+    mustChangePassword: u.mustChangePassword ?? false,
+  };
+}
+
+/**
+ * Retorna a sessão + o contexto de tenant pronto para o core (SQL cru), sem
+ * redirecionar. Para uso em server actions que devolvem erro em vez de navegar.
+ */
+export async function getArenaContext(): Promise<
+  { session: ArenaSession; ctx: ArenaUserContext } | null
+> {
+  const session = await getArenaSession();
+  if (!session) return null;
+  return {
+    session,
+    ctx: {
+      db,
+      schemaName: `tenant_${session.tenantSlug}`,
+      actorUserId: session.userId,
+    },
   };
 }
 

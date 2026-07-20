@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { getClassPackages } from "@gestao-de-quadras/core/classes/class-package.service";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -22,8 +22,8 @@ export default async function PacotesAulasPage() {
     redirect("/dashboard");
   }
 
-  const tenantDb = getTenantDb(session.user.tenantSlug!);
-  const packages = await getClassPackages(tenantDb);
+  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const packages = await getClassPackages(ctx);
 
   return (
     <div className="space-y-6">

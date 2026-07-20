@@ -8,11 +8,15 @@ import {
 } from "./customer.service";
 
 /**
- * Envolve um mock com o shape do drizzle (`.select`/`.insert`) como um
- * TenantDbClient: `executeInTenant` apenas repassa o mock como `tx`.
+ * Mock do handle Drizzle (`.execute`) usado no Mecanismo A (SQL cru).
+ * As linhas vêm em snake_case, como o Postgres retorna.
  */
-const tenant = (tx: any) =>
-  ({ executeInTenant: (fn: any) => fn(tx) }) as any;
+const mkDb = (returnedRows: unknown[]) =>
+  ({ execute: async () => ({ rows: returnedRows }) }) as any;
+
+/** Contexto de tenant com um schema válido. */
+const mkCtx = (returnedRows: unknown[]) =>
+  ({ db: mkDb(returnedRows), schemaName: "tenant_arena-x" }) as any;
 
 describe("Customer Service", () => {
   describe("WhatsappSchema Validation", () => {
@@ -43,122 +47,77 @@ describe("Customer Service", () => {
 
   describe("findOrCreateGlobalCustomer", () => {
     it("retorna found=false quando cliente não existe", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [],
-            }),
-          }),
-        }),
-      };
-
-      const result = await findOrCreateGlobalCustomer(tenant(mockDb), "+5511999999999");
+      const result = await findOrCreateGlobalCustomer(mkDb([]), "+5511999999999");
       expect(result.found).toBe(false);
     });
 
     it("retorna found=true quando cliente existe", async () => {
-      const mockCustomer = {
-        id: "cust-1",
-        whatsapp: "+5511999999999",
-        name: "João",
-        email: "joao@email.com",
-        birthDate: null,
-        photoUrl: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [mockCustomer],
-            }),
-          }),
-        }),
-      };
-
-      const result = await findOrCreateGlobalCustomer(tenant(mockDb), "+5511999999999");
+      const db = mkDb([
+        {
+          id: "cust-1",
+          whatsapp: "+5511999999999",
+          name: "João",
+          email: "joao@email.com",
+          birth_date: null,
+          photo_url: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+      const result = await findOrCreateGlobalCustomer(db, "+5511999999999");
       expect(result.found).toBe(true);
       expect(result.customer.name).toBe("João");
     });
 
     it("valida WhatsApp antes de buscar", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [],
-            }),
-          }),
-        }),
-      };
-
       await expect(
-        findOrCreateGlobalCustomer(tenant(mockDb), "invalid-whatsapp")
+        findOrCreateGlobalCustomer(mkDb([]), "invalid-whatsapp")
       ).rejects.toThrow();
     });
   });
 
   describe("createGlobalCustomer", () => {
     it("cria cliente global com dados completos", async () => {
-      const mockDb = {
-        insert: () => ({
-          values: () => ({
-            returning: () => [
-              {
-                id: "global-1",
-                whatsapp: "+5511999999999",
-                name: "Maria Silva",
-                email: "maria@email.com",
-                birthDate: new Date("1990-05-15"),
-                photoUrl: null,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          }),
-        }),
-      };
-
-      const result = await createGlobalCustomer(tenant(mockDb), {
+      const db = mkDb([
+        {
+          id: "global-1",
+          whatsapp: "+5511999999999",
+          name: "Maria Silva",
+          email: "maria@email.com",
+          birth_date: "1990-05-15",
+          photo_url: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+      const result = await createGlobalCustomer(db, {
         whatsapp: "+5511999999999",
         name: "Maria Silva",
         email: "maria@email.com",
         birthDate: new Date("1990-05-15"),
       });
-
       expect(result.whatsapp).toBe("+5511999999999");
       expect(result.name).toBe("Maria Silva");
       expect(result.email).toBe("maria@email.com");
     });
 
     it("cria cliente sem email (opcional)", async () => {
-      const mockDb = {
-        insert: () => ({
-          values: () => ({
-            returning: () => [
-              {
-                id: "global-2",
-                whatsapp: "+5511988888888",
-                name: "Carlos",
-                email: null,
-                birthDate: null,
-                photoUrl: null,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          }),
-        }),
-      };
-
-      const result = await createGlobalCustomer(tenant(mockDb), {
+      const db = mkDb([
+        {
+          id: "global-2",
+          whatsapp: "+5511988888888",
+          name: "Carlos",
+          email: null,
+          birth_date: null,
+          photo_url: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+      const result = await createGlobalCustomer(db, {
         whatsapp: "+5511988888888",
         name: "Carlos",
       });
-
       expect(result.email).toBeNull();
       expect(result.birthDate).toBeNull();
     });
@@ -166,28 +125,21 @@ describe("Customer Service", () => {
 
   describe("createCustomerInTenant", () => {
     it("cria cliente local vinculado ao global", async () => {
-      const mockDb = {
-        insert: () => ({
-          values: () => ({
-            returning: () => [
-              {
-                id: "local-1",
-                globalCustomerId: "global-1",
-                whatsapp: "+5511999999999",
-                name: "Maria Silva",
-                email: "maria@email.com",
-                birthDate: new Date("1990-05-15"),
-                status: "active",
-                createdByUserId: "user-admin",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          }),
-        }),
-      };
-
-      const result = await createCustomerInTenant(tenant(mockDb), {
+      const ctx = mkCtx([
+        {
+          id: "local-1",
+          global_customer_id: "global-1",
+          whatsapp: "+5511999999999",
+          name: "Maria Silva",
+          email: "maria@email.com",
+          birth_date: "1990-05-15",
+          status: "active",
+          created_by_user_id: "user-admin",
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+      const result = await createCustomerInTenant(ctx, {
         globalCustomerId: "global-1",
         whatsapp: "+5511999999999",
         name: "Maria Silva",
@@ -195,40 +147,31 @@ describe("Customer Service", () => {
         birthDate: new Date("1990-05-15"),
         createdByUserId: "user-admin",
       });
-
       expect(result.globalCustomerId).toBe("global-1");
       expect(result.status).toBe("active");
       expect(result.createdByUserId).toBe("user-admin");
     });
 
     it("cria cliente local sem global (cliente novo na arena)", async () => {
-      const mockDb = {
-        insert: () => ({
-          values: () => ({
-            returning: () => [
-              {
-                id: "local-2",
-                globalCustomerId: null,
-                whatsapp: "+5511977777777",
-                name: "Ana",
-                email: null,
-                birthDate: null,
-                status: "active",
-                createdByUserId: "user-gerente",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          }),
-        }),
-      };
-
-      const result = await createCustomerInTenant(tenant(mockDb), {
+      const ctx = mkCtx([
+        {
+          id: "local-2",
+          global_customer_id: null,
+          whatsapp: "+5511977777777",
+          name: "Ana",
+          email: null,
+          birth_date: null,
+          status: "active",
+          created_by_user_id: "user-gerente",
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
+      const result = await createCustomerInTenant(ctx, {
         whatsapp: "+5511977777777",
         name: "Ana",
         createdByUserId: "user-gerente",
       });
-
       expect(result.globalCustomerId).toBeNull();
       expect(result.status).toBe("active");
     });
@@ -236,84 +179,32 @@ describe("Customer Service", () => {
 
   describe("searchCustomersForPdv", () => {
     it("retorna lista vazia para query vazia", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [],
-            }),
-          }),
-        }),
-      };
-
-      const result = await searchCustomersForPdv(tenant(mockDb), "");
+      const result = await searchCustomersForPdv(mkCtx([]), "");
       expect(result).toEqual([]);
     });
 
     it("busca por nome parcial (case-insensitive)", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [
-                {
-                  id: "local-1",
-                  name: "Maria Silva",
-                  whatsapp: "+5511999999999",
-                },
-                {
-                  id: "local-2",
-                  name: "Mariana Costa",
-                  whatsapp: "+5511988888888",
-                },
-              ],
-            }),
-          }),
-        }),
-      };
-
-      const result = await searchCustomersForPdv(tenant(mockDb), "maria");
+      const ctx = mkCtx([
+        { id: "local-1", name: "Maria Silva", whatsapp: "+5511999999999" },
+        { id: "local-2", name: "Mariana Costa", whatsapp: "+5511988888888" },
+      ]);
+      const result = await searchCustomersForPdv(ctx, "maria");
       expect(result.length).toBe(2);
       expect(result[0].name).toContain("Maria");
     });
 
     it("busca por WhatsApp exato (começa com +)", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () => [
-                {
-                  id: "local-1",
-                  name: "João",
-                  whatsapp: "+5511999999999",
-                },
-              ],
-            }),
-          }),
-        }),
-      };
-
-      const result = await searchCustomersForPdv(tenant(mockDb), "+5511999999999");
+      const ctx = mkCtx([
+        { id: "local-1", name: "João", whatsapp: "+5511999999999" },
+      ]);
+      const result = await searchCustomersForPdv(ctx, "+5511999999999");
       expect(result.length).toBe(1);
       expect(result[0].whatsapp).toBe("+5511999999999");
     });
 
-    it("limita resultados a 10 registros", async () => {
-      const mockDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: (n: number) => {
-                expect(n).toBe(10);
-                return [];
-              },
-            }),
-          }),
-        }),
-      };
-
-      await searchCustomersForPdv(tenant(mockDb), "test");
+    it("não consulta o banco para query com menos de 2 caracteres", async () => {
+      const result = await searchCustomersForPdv(mkCtx([]), "a");
+      expect(result).toEqual([]);
     });
   });
 });

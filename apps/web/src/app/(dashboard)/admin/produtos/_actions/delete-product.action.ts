@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { deleteProduct } from "@gestao-de-quadras/core/product";
 
 export async function deleteProductAction(productId: string) {
@@ -15,8 +15,8 @@ export async function deleteProductAction(productId: string) {
   }
 
   try {
-    const tenantDb = getTenantDb(session.user.tenantSlug);
-    const deleted = await deleteProduct(productId, tenantDb, session.user.id);
+    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const deleted = await deleteProduct(productId, ctx);
     if (!deleted) return { status: "error", message: "Produto não encontrado" };
     return { status: "success" };
   } catch (error) {

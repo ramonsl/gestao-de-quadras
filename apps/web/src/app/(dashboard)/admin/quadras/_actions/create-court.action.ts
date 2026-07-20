@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { createCourt } from "@gestao-de-quadras/core/courts/court.service";
 import { z } from "zod";
 
@@ -31,8 +31,8 @@ export async function createCourtAction(formData: FormData) {
     return { error: result.error.flatten().fieldErrors };
   }
 
-  const tenantDb = getTenantDb(session.user.tenantSlug!);
-  await createCourt(tenantDb, {
+  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  await createCourt(ctx, {
     name: result.data.name,
     modality: result.data.modality,
   });

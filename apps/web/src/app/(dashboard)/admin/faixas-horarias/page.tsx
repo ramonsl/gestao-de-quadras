@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { getCourtsByTenant } from "@gestao-de-quadras/core/courts/court.service";
 import { getTimeSlots } from "@gestao-de-quadras/core/courts/court-time-slot.service";
 import type { CourtTimeSlot } from "@gestao-de-quadras/db/schema";
@@ -34,12 +34,12 @@ export default async function FaixasHorariasPage() {
     redirect("/dashboard");
   }
 
-  const tenantDb = getTenantDb(session.user.tenantSlug!);
-  const courts = await getCourtsByTenant(tenantDb);
+  const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+  const courts = await getCourtsByTenant(ctx);
 
   const slotsMap = new Map<string, CourtTimeSlot[]>();
   for (const court of courts) {
-    const slots = await getTimeSlots(tenantDb, court.id);
+    const slots = await getTimeSlots(ctx, court.id);
     slotsMap.set(court.id, slots);
   }
 

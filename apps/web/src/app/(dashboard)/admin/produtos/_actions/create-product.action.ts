@@ -1,6 +1,6 @@
 "use server";
 import { auth } from "@/auth";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { createProduct, createProductInput } from "@gestao-de-quadras/core/product";
 
 type CreateProductState = {
@@ -34,7 +34,8 @@ export async function createProductAction(_prev: CreateProductState, formData: F
   if (!parsed.success) return { status: "error", message: "Dados inválidos", fieldErrors: parsed.error.flatten().fieldErrors };
 
   try {
-    const p = await createProduct(parsed.data, getTenantDb(s.user.tenantSlug), s.user.id);
+    const ctx = { db, schemaName: `tenant_${s.user.tenantSlug}`, actorUserId: s.user.id };
+    const p = await createProduct(parsed.data, ctx);
     return { status: "success", productId: p.id };
   } catch (e) {
     return { status: "error", message: "Erro ao criar" };

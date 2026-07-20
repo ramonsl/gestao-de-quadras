@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { getTenantDb } from "@gestao-de-quadras/db";
+import { db } from "@gestao-de-quadras/db";
 import { createCourtTimeSlot } from "@gestao-de-quadras/core/courts/court-time-slot.service";
 import { z } from "zod";
 
@@ -57,8 +57,8 @@ export async function createTimeSlotAction(formData: FormData) {
   }
 
   try {
-    const tenantDb = getTenantDb(session.user.tenantSlug!);
-    const slot = await createCourtTimeSlot(tenantDb, {
+    const ctx = { db, schemaName: `tenant_${session.user.tenantSlug}`, actorUserId: session.user.id };
+    const slot = await createCourtTimeSlot(ctx, {
       courtId: result.data.courtId,
       dayOfWeek: result.data.dayOfWeek as any,
       startTimeHHMM: result.data.startTimeHHMM,

@@ -1,67 +1,72 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { requireSession } from "@/lib/session";
 import { createCourtAction } from "../_actions/create-court.action";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-export default async function NovaQuadraPage() {
-  const session = await auth();
-  if (!session?.user) {
-    redirect("/login");
-  }
+const labelCls = "block text-xs font-semibold text-[var(--text-2)] mb-1.5";
+const inputCls =
+  "w-full h-9 px-3 text-sm text-[var(--text-1)] bg-white border border-[var(--border)] rounded-[var(--radius-input)] outline-none transition-[border-color] duration-[180ms] placeholder:text-[var(--text-3)] focus:border-[var(--accent)]";
 
-  if (!["admin", "gerente"].includes(session.user.role ?? "")) {
-    redirect("/dashboard");
+export default async function NovaQuadraPage() {
+  await requireSession();
+
+  async function handleCreate(formData: FormData) {
+    "use server";
+    await createCourtAction(formData);
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Nova Quadra</h1>
+    <>
+      <header className="h-14 shrink-0 px-[22px] flex items-center bg-white border-b border-[var(--border)]">
+        <h1 className="text-base font-semibold text-[var(--text-1)]">Nova quadra</h1>
+      </header>
 
-      <form
-        action={async (formData: FormData) => {
-          "use server";
-          await createCourtAction(formData);
-        }}
-        className="space-y-4"
-      >
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-2">
-            Nome da Quadra
-          </label>
-          <input
-            type="text"
-            id="name"
-            name="name"
-            placeholder="Ex: Quadra 1 - Vidro"
-            className="w-full px-3 py-2 border rounded-lg"
-            required
-          />
-        </div>
+      <main className="flex-1 min-h-0 overflow-auto p-[22px]">
+        <form
+          action={handleCreate}
+          className="max-w-2xl bg-white border border-[var(--border)] rounded-[var(--radius-card)] p-6 space-y-5"
+          style={{ boxShadow: "var(--shadow-card)" }}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="name" className={labelCls}>
+                Nome da quadra *
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                placeholder="Ex.: Quadra 01 - Panorâmica"
+                className={inputCls}
+                required
+              />
+            </div>
 
-        <div>
-          <label htmlFor="modality" className="block text-sm font-medium mb-2">
-            Modalidade
-          </label>
-          <select
-            id="modality"
-            name="modality"
-            className="w-full px-3 py-2 border rounded-lg"
-            required
-          >
-            <option value="">Selecione uma modalidade</option>
-            <option value="Padel">Padel</option>
-            <option value="Beach Tennis">Beach Tennis</option>
-          </select>
-        </div>
+            <div>
+              <label htmlFor="modality" className={labelCls}>
+                Modalidade *
+              </label>
+              <select id="modality" name="modality" className={inputCls} required defaultValue="Padel">
+                <option value="Padel">Padel</option>
+                <option value="Beach Tennis">Beach Tennis</option>
+                <option value="Tênis">Tênis</option>
+              </select>
+            </div>
+          </div>
 
-        <div className="flex gap-2">
-          <Button type="submit">Criar Quadra</Button>
-          <Link href="/admin/quadras">
-            <Button variant="outline">Cancelar</Button>
-          </Link>
-        </div>
-      </form>
-    </div>
+          <div className="flex items-center gap-3 pt-3">
+            <button
+              type="submit"
+              className="h-9 px-4 text-sm font-semibold text-white rounded-[var(--radius-button)] transition-colors duration-[180ms]"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              Salvar quadra
+            </button>
+            <Link href="/admin/quadras" className="text-sm text-[var(--text-3)] hover:text-[var(--text-2)]">
+              Cancelar
+            </Link>
+          </div>
+        </form>
+      </main>
+    </>
   );
 }

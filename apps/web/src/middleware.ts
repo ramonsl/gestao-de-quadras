@@ -6,6 +6,7 @@ import type { NextRequest } from "next/server";
 const { auth } = NextAuth(authConfig);
 
 const PUBLIC_PATHS = [
+  "/",
   "/login",
   "/recuperar-senha",
   "/redefinir-senha",
@@ -15,7 +16,8 @@ const PUBLIC_PATHS = [
 ];
 
 function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  if (pathname === "/") return true;
+  return PUBLIC_PATHS.some((p) => p !== "/" && pathname.startsWith(p));
 }
 
 function resolveTenantSlug(request: NextRequest): string | null {

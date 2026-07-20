@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 200" width="940" height="200">
+  <title>Marcou Torneios</title>
+  <g transform="translate(10,12)">
+    <rect width="176" height="176" rx="46" fill="#DCF34A"/>
+    <g fill="none" stroke="#0E2E4A" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M32 48 L62 48 L62 76 L88 76"/>
+      <path d="M32 104 L62 104 L62 76"/>
+      <path d="M88 76 L88 112 L112 112"/>
+      <path d="M32 128 L62 128 L62 112 L88 112" opacity="0.28"/>
+    </g>
+    <circle cx="130" cy="112" r="19" fill="#1B6CA8"/>
+  </g>
+  <text x="222" y="112" font-family="Inter, Helvetica, Arial, sans-serif" font-size="76" font-weight="800" letter-spacing="-2.8" fill="#0E2E4A">marcou <tspan fill="#1B6CA8">torneios!</tspan></text>
+  <text x="226" y="152" font-family="Inter, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="5.5" fill="#1B6CA8">INSCREVEU · CHAVEOU · PREMIOU</text>
+</svg>

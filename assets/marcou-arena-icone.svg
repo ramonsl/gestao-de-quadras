@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 176" width="176" height="176">
+  <title>Marcou Arena — ícone</title>
+  <rect width="176" height="176" rx="46" fill="#1B6CA8"/>
+  <ellipse cx="88" cy="147" rx="61" ry="17" fill="#ffffff" opacity="0.16"/>
+  <path d="M43 98 L86 147 L143 69" fill="none" stroke="#ffffff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="143" cy="69" r="26" fill="#1B6CA8"/>
+  <circle cx="143" cy="69" r="18.5" fill="#DCF34A"/>
+</svg>

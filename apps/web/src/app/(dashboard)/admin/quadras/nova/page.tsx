@@ -18,7 +18,13 @@ export default async function NovaQuadraPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Nova Quadra</h1>
 
-      <form action={createCourtAction} className="space-y-4">
+      <form
+        action={async (formData: FormData) => {
+          "use server";
+          await createCourtAction(formData);
+        }}
+        className="space-y-4"
+      >
         <div>
           <label htmlFor="name" className="block text-sm font-medium mb-2">
             Nome da Quadra

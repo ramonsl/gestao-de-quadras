@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTenantDb } from "@gestao-de-quadras/db";
 import { getCourtsByTenant } from "@gestao-de-quadras/core/courts/court.service";
 import { getCourtServices } from "@gestao-de-quadras/core/courts/court-service.service";
+import type { CourtService } from "@gestao-de-quadras/db/schema";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -32,7 +33,7 @@ export default async function ServicosQuadrasPage() {
   const tenantDb = getTenantDb(session.user.tenantSlug!);
   const courts = await getCourtsByTenant(tenantDb);
 
-  const servicesMap = new Map();
+  const servicesMap = new Map<string, CourtService[]>();
   for (const court of courts) {
     const services = await getCourtServices(tenantDb, court.id);
     servicesMap.set(court.id, services);

@@ -67,13 +67,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     session({ session, token }) {
-      const s = session as unknown as Record<string, unknown>;
-      session.user.id = token.userId as string;
-      s.tenantSlug = token.tenantSlug;
-      s.username = token.username;
-      s.role = token.role;
-      s.modulesAllowed = token.modulesAllowed;
-      s.mustChangePassword = token.mustChangePassword;
+      const t = token as {
+        userId: string;
+        tenantSlug: string;
+        username: string;
+        role: string;
+        modulesAllowed: string[];
+        mustChangePassword: boolean;
+      };
+      // Os consumidores leem tudo de `session.user` — mantemos os campos lá.
+      session.user.id = t.userId;
+      session.user.tenantSlug = t.tenantSlug;
+      session.user.username = t.username;
+      session.user.role = t.role;
+      session.user.modulesAllowed = t.modulesAllowed;
+      session.user.mustChangePassword = t.mustChangePassword;
       return session;
     },
   },

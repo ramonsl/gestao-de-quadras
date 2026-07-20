@@ -18,7 +18,13 @@ export default async function NewCustomerPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Novo Cliente</h1>
 
-      <form action={createCustomerAction} className="space-y-4">
+      <form
+        action={async (formData: FormData) => {
+          "use server";
+          await createCustomerAction(formData);
+        }}
+        className="space-y-4"
+      >
         <div>
           <label htmlFor="whatsapp" className="block text-sm font-medium mb-2">
             WhatsApp (E.164) *

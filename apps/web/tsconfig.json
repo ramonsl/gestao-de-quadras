@@ -27,6 +27,7 @@
       "@gestao-de-quadras/core/email/email.provider": ["../../packages/core/src/email/email.provider.ts"],
       "@gestao-de-quadras/core/users/user.service": ["../../packages/core/src/users/user.service.ts"],
       "@gestao-de-quadras/core/users/modules": ["../../packages/core/src/users/modules.ts"],
+      "@gestao-de-quadras/core/customers/customer.service": ["../../packages/core/src/customers/customer.service.ts"],
       "@gestao-de-quadras/core/product": ["../../packages/core/src/product/index.ts"],
       "@gestao-de-quadras/core/courts/court.service": ["../../packages/core/src/courts/court.service.ts"],
       "@gestao-de-quadras/core/courts/court-service.service": ["../../packages/core/src/courts/court-service.service.ts"],

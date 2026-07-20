@@ -1,7 +1,6 @@
 "use client";
-import { useFormState } from "react-dom";
+import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import type { Product } from "@gestao-de-quadras/db/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,13 +10,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 type FormState = { status: string; message?: string; fieldErrors?: Record<string, string[]> };
 
 interface ProductFormProps {
-  action: (prev: FormState, formData: FormData) => Promise<FormState>;
+  // `prev` é intencionalmente frouxo: aceita tanto o estado de criar quanto o de
+  // editar (unions de status distintos) sem quebrar a variância do parâmetro.
+  action: (prev: any, formData: FormData) => Promise<FormState>;
   initialData?: Product;
 }
 
 export function ProductForm({ action, initialData }: ProductFormProps) {
   const router = useRouter();
-  const [state, form] = useFormState(action, { status: "idle" });
+  const [state, form] = useActionState(action, { status: "idle" });
 
   useEffect(() => {
     if (state.status === "success") { router.push("/admin/produtos"); router.refresh(); }

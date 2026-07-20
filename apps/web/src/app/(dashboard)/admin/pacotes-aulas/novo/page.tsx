@@ -18,7 +18,13 @@ export default async function NovoPacoteAulaPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Novo Pacote de Aulas</h1>
 
-      <form action={createPackageAction} className="space-y-4">
+      <form
+        action={async (formData: FormData) => {
+          "use server";
+          await createPackageAction(formData);
+        }}
+        className="space-y-4"
+      >
         <div>
           <label htmlFor="name" className="block text-sm font-medium mb-2">
             Nome do Pacote

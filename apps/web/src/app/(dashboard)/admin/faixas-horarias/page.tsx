@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTenantDb } from "@gestao-de-quadras/db";
 import { getCourtsByTenant } from "@gestao-de-quadras/core/courts/court.service";
 import { getTimeSlots } from "@gestao-de-quadras/core/courts/court-time-slot.service";
+import type { CourtTimeSlot } from "@gestao-de-quadras/db/schema";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
@@ -36,7 +37,7 @@ export default async function FaixasHorariasPage() {
   const tenantDb = getTenantDb(session.user.tenantSlug!);
   const courts = await getCourtsByTenant(tenantDb);
 
-  const slotsMap = new Map();
+  const slotsMap = new Map<string, CourtTimeSlot[]>();
   for (const court of courts) {
     const slots = await getTimeSlots(tenantDb, court.id);
     slotsMap.set(court.id, slots);
@@ -59,13 +60,12 @@ export default async function FaixasHorariasPage() {
         <div className="space-y-6">
           {courts.map((court) => {
             const slots = slotsMap.get(court.id) || [];
-            const slotsByDay = new Map();
+            const slotsByDay = new Map<number, CourtTimeSlot[]>();
 
             slots.forEach((slot) => {
-              if (!slotsByDay.has(slot.dayOfWeek)) {
-                slotsByDay.set(slot.dayOfWeek, []);
-              }
-              slotsByDay.get(slot.dayOfWeek).push(slot);
+              const arr = slotsByDay.get(slot.dayOfWeek) ?? [];
+              arr.push(slot);
+              slotsByDay.set(slot.dayOfWeek, arr);
             });
 
             return (

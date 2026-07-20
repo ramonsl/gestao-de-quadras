@@ -12,7 +12,9 @@ const loginSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  // Jornada operacional de um turno; o status do operador ainda é revalidado
+  // no banco a cada requisição protegida (ver lib/session.ts).
+  session: { strategy: "jwt", maxAge: 60 * 60 * 8 },
 
   providers: [
     Credentials({

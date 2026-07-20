@@ -47,9 +47,6 @@ export default function LoginPage({
           )}
 
           <form action={formAction} className="space-y-4">
-            {/* tenantSlug enviado como campo hidden — resolução via query param em dev */}
-            <input type="hidden" name="tenantSlug" value={process.env.NEXT_PUBLIC_TENANT_SLUG ?? ""} />
-
             <div>
               <label
                 htmlFor="identifier"

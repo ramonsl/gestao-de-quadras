@@ -6,10 +6,10 @@ import { createPasswordResetToken } from "@gestao-de-quadras/core/auth/auth.serv
 import { ResendEmailProvider } from "@gestao-de-quadras/core/email/email.provider";
 import { tenants } from "@gestao-de-quadras/db/schema";
 import { eq } from "drizzle-orm";
+import { resolveTenantSlugFromHost } from "@/lib/tenant";
 
 const schema = z.object({
   email: z.string().email("E-mail inválido."),
-  tenantSlug: z.string().min(1),
 });
 
 export type ForgotPasswordActionState =
@@ -23,14 +23,20 @@ export async function forgotPasswordAction(
 ): Promise<ForgotPasswordActionState> {
   const parsed = schema.safeParse({
     email: formData.get("email"),
-    tenantSlug: formData.get("tenantSlug"),
   });
 
   if (!parsed.success) {
     return { status: "validation_error", errors: parsed.error.flatten().fieldErrors };
   }
 
-  const { email, tenantSlug } = parsed.data;
+  const { email } = parsed.data;
+
+  // O tenant vem do Host, nunca do formulário. Sem arena identificada,
+  // responder como se tivesse enviado (não revelar nada).
+  const tenantSlug = await resolveTenantSlugFromHost();
+  if (!tenantSlug) {
+    return { status: "sent" };
+  }
 
   const token = await createPasswordResetToken(email, `tenant_${tenantSlug}`, db);
 

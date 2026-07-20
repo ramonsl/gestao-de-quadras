@@ -12,6 +12,10 @@ import {
   type UpdateArenaUserInput,
 } from "@gestao-de-quadras/core/users/user.service";
 import { MODULES, type ModuleSlug } from "@gestao-de-quadras/core/users/modules";
+import { z } from "zod";
+
+/** userId vem do cliente — validar antes de chegar ao Postgres (evita 500 por cast). */
+const userIdSchema = z.string().uuid();
 
 export type UserFormState =
   | { status: "idle" }
@@ -92,6 +96,9 @@ export async function updateUserAction(
 
 export async function deactivateUserAction(userId: string): Promise<UserFormState> {
   const { ctx } = await requireAdmin();
+  if (!userIdSchema.safeParse(userId).success) {
+    return { status: "error", message: "Usuário não encontrado." };
+  }
   const result = await deactivateArenaUser(userId, ctx);
   if (!result.success) {
     const message =
@@ -106,6 +113,9 @@ export async function deactivateUserAction(userId: string): Promise<UserFormStat
 
 export async function reactivateUserAction(userId: string): Promise<UserFormState> {
   const { ctx } = await requireAdmin();
+  if (!userIdSchema.safeParse(userId).success) {
+    return { status: "error", message: "Usuário não encontrado." };
+  }
   const result = await reactivateArenaUser(userId, ctx);
   if (!result.success) {
     return { status: "error", message: "Usuário não encontrado." };
@@ -120,6 +130,9 @@ export async function resetPasswordAction(
   mustChangePassword: boolean
 ): Promise<UserFormState> {
   const { ctx } = await requireAdmin();
+  if (!userIdSchema.safeParse(userId).success) {
+    return { status: "error", message: "Usuário não encontrado." };
+  }
   const result = await resetArenaUserPassword(userId, newPassword, ctx, { mustChangePassword });
   if (!result.success) {
     const message =

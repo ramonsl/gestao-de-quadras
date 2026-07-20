@@ -70,9 +70,18 @@ export async function provisionNewTenant(input: ProvisionInput) {
     )
   `);
 
+  // Nomes de índice são escopados por schema — sem sufixo de slug, para não
+  // divergir do script de migração e acabar criando um índice duplicado.
   await db.execute(sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier(`users_tenants_username_unique_${input.slug}`)}
+    CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("users_tenants_username_unique")}
     ON ${table} ("username")
+  `);
+
+  // E-mail é opcional, mas quando informado precisa ser único no tenant:
+  // sem isso, o login por e-mail e o reset por token atingiriam conta arbitrária.
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("users_tenants_email_unique")}
+    ON ${table} ("email") WHERE "email" IS NOT NULL
   `);
 
   await db.execute(sql`

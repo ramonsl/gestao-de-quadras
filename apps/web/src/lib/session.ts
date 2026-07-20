@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import type { ArenaUserContext } from "@gestao-de-quadras/core/users/user.service";
+import { getArenaUser, type ArenaUserContext } from "@gestao-de-quadras/core/users/user.service";
 import { db } from "@gestao-de-quadras/db";
 
 export interface ArenaSession {
@@ -35,11 +35,26 @@ export async function getArenaSession(): Promise<ArenaSession | null> {
   };
 }
 
-/** Exige um operador autenticado; redireciona ao login caso contrário. */
+/**
+ * Exige um operador autenticado e **revalida o vínculo no banco**.
+ *
+ * Os claims do JWT são estáticos até a expiração; sem esta checagem, inativar ou
+ * rebaixar um operador não teria efeito sobre uma sessão já emitida — o oposto
+ * do que a gestão de usuários promete ao Admin (SAAS-12).
+ */
 export async function requireSession(): Promise<ArenaSession> {
   const session = await getArenaSession();
   if (!session) redirect("/login");
-  return session;
+
+  const current = await getArenaUser(
+    { db, schemaName: `tenant_${session.tenantSlug}`, actorUserId: session.userId },
+    session.userId
+  );
+
+  if (!current || current.status !== "active") redirect("/login");
+
+  // O perfil/módulos vigentes no banco prevalecem sobre os do token
+  return { ...session, role: current.role, modulesAllowed: current.modulesAllowed };
 }
 
 /**

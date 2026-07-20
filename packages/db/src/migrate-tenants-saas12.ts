@@ -32,7 +32,8 @@ async function migrateSchema(schemaName: string): Promise<void> {
     sql`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS "last_login_at" timestamp`,
     sql`ALTER TABLE ${t} ALTER COLUMN "username" DROP DEFAULT`,
     sql`ALTER TABLE ${t} ALTER COLUMN "name" DROP DEFAULT`,
-    sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier(`users_tenants_username_unique_${schemaName}`)} ON ${t} ("username")`,
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("users_tenants_username_unique")} ON ${t} ("username")`,
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS ${sql.identifier("users_tenants_email_unique")} ON ${t} ("email") WHERE "email" IS NOT NULL`,
   ];
   for (const stmt of statements) {
     await db.execute(stmt);

@@ -40,7 +40,19 @@ export type ValidateCredentialsResult =
 
 export type TokenOperationResult =
   | { success: true }
-  | { success: false; reason: "token_not_found" | "token_expired" };
+  | { success: false; reason: "token_not_found" | "token_expired" | "weak_password" };
+
+/** Mínimo de senha aplicado no core — a borda não é a única defesa. */
+export const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
+
+function isPasswordAcceptable(password: string): boolean {
+  return (
+    typeof password === "string" &&
+    password.length >= PASSWORD_MIN_LENGTH &&
+    password.length <= PASSWORD_MAX_LENGTH
+  );
+}
 
 type AuthUserRow = {
   id: string;
@@ -196,6 +208,10 @@ export async function activateAccount(
 ): Promise<TokenOperationResult> {
   assertSchema(schemaName);
 
+  if (!isPasswordAcceptable(newPassword)) {
+    return { success: false, reason: "weak_password" };
+  }
+
   const now = new Date();
   const found = await db.execute<AuthUserRow>(
     sql`SELECT id, activation_token_expires_at FROM ${usersTable(schemaName)}
@@ -262,6 +278,10 @@ export async function resetPassword(
   db: AuthDb
 ): Promise<TokenOperationResult> {
   assertSchema(schemaName);
+
+  if (!isPasswordAcceptable(newPassword)) {
+    return { success: false, reason: "weak_password" };
+  }
 
   const now = new Date();
   const found = await db.execute<{ id: string; reset_token_expires_at: Date | null }>(

@@ -66,7 +66,7 @@ export function UserTable({ users }: { users: ArenaUserListItem[] }) {
       <div className="bg-white border border-[var(--border)] rounded-[var(--radius-card)] overflow-hidden">
         <table className="w-full text-[12.5px]">
           <thead>
-            <tr className="text-left text-[10px] font-bold tracking-[0.06em] text-[var(--text-3)] border-b border-[var(--border)]">
+            <tr className="text-left text-overline text-[var(--text-3)] border-b border-[var(--border)]">
               <th className="px-4 py-3">NOME · USUÁRIO</th>
               <th className="px-4 py-3">PERFIL</th>
               <th className="px-4 py-3">MÓDULOS</th>

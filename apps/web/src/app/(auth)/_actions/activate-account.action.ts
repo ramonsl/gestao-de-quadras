@@ -3,10 +3,10 @@
 import { z } from "zod";
 import { db } from "@gestao-de-quadras/db";
 import { activateAccount } from "@gestao-de-quadras/core/auth/auth.service";
+import { resolveTenantSlugFromHost } from "@/lib/tenant";
 
 const schema = z.object({
   token: z.string().min(1),
-  tenantSlug: z.string().min(1),
   password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres."),
   confirmPassword: z.string(),
 }).refine((d) => d.password === d.confirmPassword, {
@@ -26,7 +26,6 @@ export async function activateAccountAction(
 ): Promise<ActivateAccountActionState> {
   const parsed = schema.safeParse({
     token: formData.get("token"),
-    tenantSlug: formData.get("tenantSlug"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
   });
@@ -35,10 +34,15 @@ export async function activateAccountAction(
     return { status: "validation_error", errors: parsed.error.flatten().fieldErrors };
   }
 
+  const tenantSlug = await resolveTenantSlugFromHost();
+  if (!tenantSlug) {
+    return { status: "error", message: "Arena não identificada. Verifique o endereço de acesso." };
+  }
+
   const result = await activateAccount(
     parsed.data.token,
     parsed.data.password,
-    `tenant_${parsed.data.tenantSlug}`,
+    `tenant_${tenantSlug}`,
     db
   );
 

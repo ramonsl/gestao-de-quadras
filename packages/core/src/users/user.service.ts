@@ -56,7 +56,7 @@ const roleSchema = z.enum(["admin", "gerente", "atendente"]);
 const moduleSchema = z.enum(MODULES);
 
 export const createArenaUserSchema = z.object({
-  name: z.string().trim().min(1, "Informe o nome."),
+  name: z.string().trim().min(1, "Informe o nome.").max(120, "Nome muito longo."),
   username: z
     .string()
     .trim()
@@ -64,7 +64,11 @@ export const createArenaUserSchema = z.object({
     .min(3, "O usuário deve ter ao menos 3 caracteres.")
     .max(50)
     .regex(/^[a-z0-9._-]+$/, "Use apenas letras minúsculas, números, ponto, hífen ou underscore."),
-  password: z.string().min(PASSWORD_MIN_LENGTH, `A senha deve ter ao menos ${PASSWORD_MIN_LENGTH} caracteres.`),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `A senha deve ter ao menos ${PASSWORD_MIN_LENGTH} caracteres.`)
+    // Limite superior evita DoS no argon2 com payload gigante
+    .max(128, "Senha muito longa."),
   email: z.string().trim().toLowerCase().email("E-mail inválido.").optional().or(z.literal("").transform(() => undefined)),
   phone: z.string().trim().max(20).optional().or(z.literal("").transform(() => undefined)),
   role: roleSchema,
@@ -73,7 +77,7 @@ export const createArenaUserSchema = z.object({
 });
 
 export const updateArenaUserSchema = z.object({
-  name: z.string().trim().min(1, "Informe o nome."),
+  name: z.string().trim().min(1, "Informe o nome.").max(120, "Nome muito longo."),
   email: z.string().trim().toLowerCase().email("E-mail inválido.").optional().or(z.literal("").transform(() => undefined)),
   phone: z.string().trim().max(20).optional().or(z.literal("").transform(() => undefined)),
   role: roleSchema,
@@ -229,7 +233,9 @@ export async function createArenaUser(
   }
 
   const passwordHash = await hash(data.password);
-  const modulesJson = JSON.stringify(data.modulesAllowed);
+  // Admin é irrestrito por definição (AC5) — não depende da seleção da UI
+  const modules = data.role === "admin" ? [...MODULES] : data.modulesAllowed;
+  const modulesJson = JSON.stringify(modules);
 
   const inserted = await ctx.db.execute<{ id: string }>(
     sql`INSERT INTO ${usersTable(ctx.schemaName)}
@@ -244,7 +250,7 @@ export async function createArenaUser(
     targetUserId: userId,
     username: data.username,
     role: data.role,
-    modulesAllowed: data.modulesAllowed,
+    modulesAllowed: modules,
   });
 
   return { success: true, userId };
@@ -285,7 +291,9 @@ export async function updateArenaUser(
     }
   }
 
-  const modulesJson = JSON.stringify(data.modulesAllowed);
+  // Admin é irrestrito por definição (AC5)
+  const modules = data.role === "admin" ? [...MODULES] : data.modulesAllowed;
+  const modulesJson = JSON.stringify(modules);
   await ctx.db.execute(
     sql`UPDATE ${usersTable(ctx.schemaName)}
         SET name = ${data.name}, email = ${data.email ?? null}, phone = ${data.phone ?? null},
@@ -306,7 +314,7 @@ export async function updateArenaUser(
   await writeAudit(ctx, modulesChanged ? "user.modules_changed" : "user.updated", {
     targetUserId: userId,
     before: { role: current.role, modulesAllowed: currentModules },
-    after: { role: data.role, modulesAllowed: data.modulesAllowed },
+    after: { role: data.role, modulesAllowed: modules },
   });
 
   return { success: true };
@@ -359,7 +367,7 @@ export async function resetArenaUserPassword(
 ): Promise<ResetPasswordResult> {
   assertSchema(ctx.schemaName);
 
-  if (!newPassword || newPassword.length < PASSWORD_MIN_LENGTH) {
+  if (!newPassword || newPassword.length < PASSWORD_MIN_LENGTH || newPassword.length > 128) {
     return { success: false, reason: "weak_password" };
   }
 

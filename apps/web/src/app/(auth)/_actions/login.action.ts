@@ -3,11 +3,11 @@
 import { signIn } from "@/auth";
 import { AuthError } from "next-auth";
 import { z } from "zod";
+import { resolveTenantSlugFromHost } from "@/lib/tenant";
 
 const loginSchema = z.object({
   identifier: z.string().min(1, "Informe seu usuário ou e-mail."),
   password: z.string().min(1, "Informe a senha."),
-  tenantSlug: z.string().min(1),
 });
 
 export type LoginActionState =
@@ -23,7 +23,6 @@ export async function loginAction(
   const parsed = loginSchema.safeParse({
     identifier: formData.get("identifier"),
     password: formData.get("password"),
-    tenantSlug: formData.get("tenantSlug"),
   });
 
   if (!parsed.success) {
@@ -33,11 +32,17 @@ export async function loginAction(
     };
   }
 
+  // O tenant vem do Host, nunca do formulário
+  const tenantSlug = await resolveTenantSlugFromHost();
+  if (!tenantSlug) {
+    return { status: "error", message: "Arena não identificada. Verifique o endereço de acesso." };
+  }
+
   try {
     await signIn("credentials", {
       identifier: parsed.data.identifier,
       password: parsed.data.password,
-      tenantSlug: parsed.data.tenantSlug,
+      tenantSlug,
       redirectTo: "/usuarios",
     });
   } catch (error) {

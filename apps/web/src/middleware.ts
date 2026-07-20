@@ -33,12 +33,16 @@ function resolveTenantSlug(request: NextRequest): string | null {
     return host.replace(`.${baseDomain}`, "");
   }
 
-  // Desenvolvimento: query param
-  const tenantParam = request.nextUrl.searchParams.get("tenant");
-  if (tenantParam) return tenantParam;
+  // Fora de produção o tenant pode vir por query param ou env fixa. Em produção
+  // isso NUNCA é aceito: permitiria acessar outra arena (inclusive suspensa)
+  // apenas trocando ?tenant= na URL.
+  if (process.env.NODE_ENV !== "production") {
+    const tenantParam = request.nextUrl.searchParams.get("tenant");
+    if (tenantParam) return tenantParam;
+    return process.env.TENANT_SLUG ?? null;
+  }
 
-  // Fallback: variável de ambiente fixa (testes locais)
-  return process.env.TENANT_SLUG ?? null;
+  return null;
 }
 
 export default auth(async (request) => {
@@ -71,6 +75,15 @@ export default auth(async (request) => {
   if (!session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
+    loginUrl.searchParams.set("tenant", tenantSlug);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // A sessão é válida apenas na arena em que foi emitida: um token de outro
+  // tenant não pode ser reaproveitado neste host.
+  const sessionTenant = (session as unknown as { tenantSlug?: string }).tenantSlug;
+  if (sessionTenant !== tenantSlug) {
+    const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("tenant", tenantSlug);
     return NextResponse.redirect(loginUrl);
   }

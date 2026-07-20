@@ -20,4 +20,5 @@ ALTER TABLE "tenant_template"."users_tenants" ADD COLUMN IF NOT EXISTS "locked_u
 ALTER TABLE "tenant_template"."users_tenants" ADD COLUMN IF NOT EXISTS "last_login_at" timestamp;--> statement-breakpoint
 ALTER TABLE "tenant_template"."users_tenants" ALTER COLUMN "username" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "tenant_template"."users_tenants" ALTER COLUMN "name" DROP DEFAULT;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "users_tenants_username_unique" ON "tenant_template"."users_tenants" ("username");
+CREATE UNIQUE INDEX IF NOT EXISTS "users_tenants_username_unique" ON "tenant_template"."users_tenants" ("username");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "users_tenants_email_unique" ON "tenant_template"."users_tenants" ("email") WHERE "email" IS NOT NULL;

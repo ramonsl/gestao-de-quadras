@@ -308,6 +308,71 @@ export const studentClassBalance = pgTable(
   })
 );
 
+// --- Conexão WhatsApp / Baileys (WPP-01) ------------------------------------
+
+/**
+ * Estado de conexão do WhatsApp da arena (v1: 1 número por tenant).
+ * `status`: disconnected | connecting | qr_pending | connected | disconnected_permanent
+ */
+export const whatsappConnections = pgTable(
+  "whatsapp_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    status: varchar("status", { length: 30 }).default("disconnected").notNull(),
+    /** E.164 — só preenchido após status = connected. */
+    phoneNumber: varchar("phone_number", { length: 20 }),
+    /** Payload cru do QR (renderizado no client) — null fora de qr_pending. */
+    qrCode: text("qr_code"),
+    qrGeneratedAt: timestamp("qr_generated_at"),
+    connectedAt: timestamp("connected_at"),
+    lastDisconnectedAt: timestamp("last_disconnected_at"),
+    disconnectReason: text("disconnect_reason"),
+    reconnectAttempts: integer("reconnect_attempts").default(0).notNull(),
+    /** Dedupe do e-mail de alerta (AC4) — nunca reenviar em loop de reconexão. */
+    permanentAlertSentAt: timestamp("permanent_alert_sent_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantUnique: uniqueIndex("whatsapp_connections_tenant_unique").on(t.tenantId),
+  })
+);
+
+/** Credenciais Baileys (AuthenticationCreds) — segredo de sessão, 1 linha por tenant. */
+export const whatsappAuthCreds = pgTable(
+  "whatsapp_auth_creds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    credsJson: text("creds_json").notNull().default("{}"),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantUnique: uniqueIndex("whatsapp_auth_creds_tenant_unique").on(t.tenantId),
+  })
+);
+
+/** Chaves de sinal Baileys (pre-keys, sessions, sender-keys, app-state-sync-*). */
+export const whatsappAuthKeys = pgTable(
+  "whatsapp_auth_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    keyType: varchar("key_type", { length: 40 }).notNull(),
+    keyId: varchar("key_id", { length: 120 }).notNull(),
+    keyData: text("key_data").notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantKeyUnique: uniqueIndex("whatsapp_auth_keys_tenant_key_unique").on(
+      t.tenantId,
+      t.keyType,
+      t.keyId
+    ),
+  })
+);
+
 // ---------------------------------------------------------------------------
 // Tabelas com escopo de arena (protegidas por RLS). Fonte única para o runner
 // de migrations habilitar RLS e para testes de isolamento.
@@ -325,6 +390,9 @@ export const TENANT_SCOPED_TABLES = [
   "court_time_slots",
   "class_packages",
   "student_class_balance",
+  "whatsapp_connections",
+  "whatsapp_auth_creds",
+  "whatsapp_auth_keys",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -357,3 +425,9 @@ export type ClassPackage = typeof classPackages.$inferSelect;
 export type NewClassPackage = typeof classPackages.$inferInsert;
 export type StudentClassBalance = typeof studentClassBalance.$inferSelect;
 export type NewStudentClassBalance = typeof studentClassBalance.$inferInsert;
+export type WhatsappConnection = typeof whatsappConnections.$inferSelect;
+export type NewWhatsappConnection = typeof whatsappConnections.$inferInsert;
+export type WhatsappAuthCreds = typeof whatsappAuthCreds.$inferSelect;
+export type NewWhatsappAuthCreds = typeof whatsappAuthCreds.$inferInsert;
+export type WhatsappAuthKey = typeof whatsappAuthKeys.$inferSelect;
+export type NewWhatsappAuthKey = typeof whatsappAuthKeys.$inferInsert;

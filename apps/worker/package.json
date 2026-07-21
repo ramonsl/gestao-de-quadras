@@ -1,0 +1,23 @@
+{
+  "name": "worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gestao-de-quadras/core": "*",
+    "@gestao-de-quadras/db": "*",
+    "@gestao-de-quadras/messaging": "*",
+    "@neondatabase/serverless": "^0.9.5",
+    "drizzle-orm": "^0.30.10",
+    "resend": "^6.17.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.0.0",
+    "typescript": "^5"
+  }
+}

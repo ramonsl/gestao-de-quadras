@@ -111,6 +111,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <span className="w-2 h-2 rounded-full bg-white/40" />
                 Usuários & Permissões
               </Link>
+
+              <Link
+                href="/whatsapp"
+                className="flex items-center gap-2 px-2.5 h-9 rounded-[var(--radius-control)] text-sm text-white/90 transition-colors duration-[180ms] hover:bg-[var(--sidebar-hover)]"
+              >
+                <span className="w-2 h-2 rounded-full bg-white/40" />
+                WhatsApp
+              </Link>
             </div>
           )}
         </nav>

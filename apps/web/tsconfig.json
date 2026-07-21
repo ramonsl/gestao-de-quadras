@@ -32,7 +32,9 @@
       "@gestao-de-quadras/core/courts/court.service": ["../../packages/core/src/courts/court.service.ts"],
       "@gestao-de-quadras/core/courts/court-service.service": ["../../packages/core/src/courts/court-service.service.ts"],
       "@gestao-de-quadras/core/courts/court-time-slot.service": ["../../packages/core/src/courts/court-time-slot.service.ts"],
-      "@gestao-de-quadras/core/classes/class-package.service": ["../../packages/core/src/classes/class-package.service.ts"]
+      "@gestao-de-quadras/core/classes/class-package.service": ["../../packages/core/src/classes/class-package.service.ts"],
+      "@gestao-de-quadras/core/whatsapp/whatsapp-connection.service": ["../../packages/core/src/whatsapp/whatsapp-connection.service.ts"],
+      "@gestao-de-quadras/messaging": ["../../packages/messaging/src/index.ts"]
     }
   },
   "include": [

@@ -8,6 +8,7 @@ COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/core/package.json ./packages/core/
 COPY packages/db/package.json ./packages/db/
+COPY packages/messaging/package.json ./packages/messaging/
 
 # Garante instalacao de todas as devDependencies para compilar CSS/PostCSS
 RUN npm ci --include=dev

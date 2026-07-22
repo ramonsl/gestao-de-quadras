@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.git
+.next
+**/.next
+.env
+.env.local
+.env.*.local
+*.md
+docs
+assets
+*.pdf
+.claude

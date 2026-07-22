@@ -173,14 +173,17 @@ export async function searchCustomersForPdv(
   query: string
 ): Promise<LocalCustomer[]> {
   assertTenantId(ctx.tenantId);
-  if (!query || query.length < 2) return [];
-  const match = query.startsWith("+")
-    ? sql`whatsapp = ${query}`
-    : sql`name ILIKE ${"%" + query + "%"}`;
+  const clean = query?.trim() ?? "";
+  if (!clean || clean.length < 2) return [];
+
+  const searchPattern = `%${clean}%`;
 
   const result = await ctx.db.execute<LocalCustomerRow>(
     sql`SELECT ${LOCAL_COLS} FROM customers
-        WHERE tenant_id = ${ctx.tenantId} AND ${match} LIMIT 10`
+        WHERE tenant_id = ${ctx.tenantId}
+          AND (name ILIKE ${searchPattern} OR whatsapp ILIKE ${searchPattern})
+        ORDER BY name ASC
+        LIMIT 10`
   );
   return rows<LocalCustomerRow>(result).map(toLocal);
 }

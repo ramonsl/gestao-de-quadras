@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { assertTenantId, rows, type TenantContext } from "../db/tenant";
 import { getCustomerById } from "../customers/customer.service";
 import { getProductById } from "../product/product.service";
+import { getCurrentOpenCashSession } from "./cash-session.service";
 
 export interface Comanda {
   id: string;
@@ -31,8 +32,21 @@ export interface ComandaItemView {
   createdAt: Date;
 }
 
+export interface ComandaPaymentView {
+  id: string;
+  tenantId: string;
+  comandaId: string;
+  paymentMethod: string;
+  amountCents: number;
+  receivedCents: number | null;
+  changeCents: number;
+  operatorUserId: string;
+  createdAt: Date;
+}
+
 export interface ComandaWithItems extends Comanda {
   items: ComandaItemView[];
+  payments: ComandaPaymentView[];
   totalCents: number;
   /** null quando balcão OU quando o cliente vinculado não existe mais (sem FK). */
   customerName: string | null;
@@ -74,6 +88,18 @@ type ComandaItemRow = {
   created_at: Date;
 };
 
+type ComandaPaymentRow = {
+  id: string;
+  tenant_id: string;
+  comanda_id: string;
+  payment_method: string;
+  amount_cents: number;
+  received_cents: number | null;
+  change_cents: number;
+  operator_user_id: string;
+  created_at: Date;
+};
+
 const COMANDA_COLS = sql`id, tenant_id, customer_id, status, opened_by_user_id, created_at, updated_at`;
 const ITEM_COLS = sql`id, tenant_id, comanda_id, product_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id, created_at`;
 
@@ -104,6 +130,20 @@ function toItemView(row: ComandaItemRow): ComandaItemView {
   };
 }
 
+function toPaymentView(row: ComandaPaymentRow): ComandaPaymentView {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    comandaId: row.comanda_id,
+    paymentMethod: row.payment_method,
+    amountCents: row.amount_cents,
+    receivedCents: row.received_cents,
+    changeCents: row.change_cents,
+    operatorUserId: row.operator_user_id,
+    createdAt: row.created_at,
+  };
+}
+
 async function writeAudit(
   ctx: TenantContext,
   action: string,
@@ -125,7 +165,8 @@ export const OpenComandaInputSchema = z.object({
 
 export type OpenComandaResult =
   | { success: true; comanda: Comanda }
-  | { success: false; reason: "customer_not_found" };
+  | { success: false; reason: "customer_not_found" }
+  | { success: false; reason: "already_has_open_comanda"; existingComandaId: string };
 
 export async function openComanda(
   ctx: TenantContext,
@@ -142,6 +183,15 @@ export async function openComanda(
     // Guarda IDOR (regra 1b): nunca aceitar um id de cliente sem revalidar o tenant.
     const customer = await getCustomerById(ctx, customerId);
     if (!customer) return { success: false, reason: "customer_not_found" };
+
+    // Regra PDV-04: Um mesmo cliente não pode ter mais de uma comanda em aberto simultaneamente.
+    const existingOpenComandaResult = await ctx.db.execute<{ id: string }>(
+      sql`SELECT id FROM comandas WHERE tenant_id = ${ctx.tenantId} AND customer_id = ${customerId} AND status = 'open' LIMIT 1`
+    );
+    const existingRow = rows<{ id: string }>(existingOpenComandaResult)[0];
+    if (existingRow) {
+      return { success: false, reason: "already_has_open_comanda", existingComandaId: existingRow.id };
+    }
   }
 
   const result = await ctx.db.execute<ComandaRow>(
@@ -247,9 +297,18 @@ export async function getComandaWithItems(
   const items = rows<ComandaItemRow>(itemsResult).map(toItemView);
   const totalCents = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
 
+  const paymentsResult = await ctx.db.execute<ComandaPaymentRow>(
+    sql`SELECT id, tenant_id, comanda_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id, created_at
+        FROM comanda_payments
+        WHERE tenant_id = ${ctx.tenantId} AND comanda_id = ${comandaId}
+        ORDER BY created_at ASC`
+  );
+  const payments = rows<ComandaPaymentRow>(paymentsResult).map(toPaymentView);
+
   return {
     ...toComanda(comandaRow),
     items,
+    payments,
     totalCents,
     customerName: comandaRow.customer_name,
     customerWhatsapp: comandaRow.customer_whatsapp,
@@ -282,7 +341,7 @@ export async function listOpenComandas(ctx: TenantContext): Promise<OpenComandaL
                COALESCE((SELECT SUM(ci.quantity * ci.unit_price_cents_at_sale)
                          FROM comanda_items ci
                          WHERE ci.tenant_id = c.tenant_id AND ci.comanda_id = c.id), 0) AS total_cents,
-               COALESCE((SELECT COUNT(*)
+               COALESCE((SELECT SUM(ci2.quantity)
                          FROM comanda_items ci2
                          WHERE ci2.tenant_id = c.tenant_id AND ci2.comanda_id = c.id), 0) AS item_count
         FROM comandas c
@@ -312,7 +371,13 @@ export type LinkCustomerToComandaResult =
   | { success: true; comanda: Comanda }
   | {
       success: false;
-      reason: "comanda_not_found" | "comanda_closed" | "already_identified" | "customer_not_found";
+      reason:
+        | "comanda_not_found"
+        | "comanda_closed"
+        | "already_identified"
+        | "customer_not_found"
+        | "customer_already_has_open_comanda";
+      existingComandaId?: string;
     };
 
 export async function linkCustomerToComanda(
@@ -337,6 +402,19 @@ export async function linkCustomerToComanda(
   const customer = await getCustomerById(ctx, data.customerId);
   if (!customer) return { success: false, reason: "customer_not_found" };
 
+  // Regra PDV-04: Verificar se o cliente já possui uma comanda em aberto
+  const existingOpenComandaResult = await ctx.db.execute<{ id: string }>(
+    sql`SELECT id FROM comandas WHERE tenant_id = ${ctx.tenantId} AND customer_id = ${data.customerId} AND status = 'open' LIMIT 1`
+  );
+  const existingRow = rows<{ id: string }>(existingOpenComandaResult)[0];
+  if (existingRow) {
+    return {
+      success: false,
+      reason: "customer_already_has_open_comanda",
+      existingComandaId: existingRow.id,
+    };
+  }
+
   // Guarda condicional atômica: protege contra duas vinculações concorrentes.
   const updateResult = await ctx.db.execute<ComandaRow>(
     sql`UPDATE comandas SET customer_id = ${data.customerId}, updated_at = now()
@@ -349,4 +427,135 @@ export async function linkCustomerToComanda(
   const comanda = toComanda(updatedRow);
   await writeAudit(ctx, "pdv.comanda.customer_linked", { comandaId: comanda.id, customerId: data.customerId });
   return { success: true, comanda };
+}
+
+// --- Fechamento de comanda e pagamentos (PDV-07) ----------------------------
+
+export const PaymentMethodEnum = z.enum([
+  "dinheiro",
+  "pix",
+  "cartao_credito",
+  "cartao_debito",
+  "pontos",
+]);
+
+export const PaymentInputSchema = z.object({
+  paymentMethod: PaymentMethodEnum,
+  amountCents: z.number().int().positive(),
+  receivedCents: z.number().int().positive().optional(),
+});
+
+export const CloseComandaInputSchema = z.object({
+  comandaId: z.string().uuid(),
+  discountCents: z.number().int().nonnegative().optional().default(0),
+  payments: z.array(PaymentInputSchema).min(1),
+});
+
+export type CloseComandaResult =
+  | { success: true; comanda: Comanda; payments: ComandaPaymentView[]; totalChangeCents: number }
+  | {
+      success: false;
+      reason:
+        | "comanda_not_found"
+        | "comanda_closed"
+        | "comanda_empty"
+        | "insufficient_payment"
+        | "invalid_cash_received";
+    };
+
+export async function closeComanda(
+  ctx: TenantContext,
+  input: z.infer<typeof CloseComandaInputSchema>
+): Promise<CloseComandaResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("closeComanda exige ctx.actorUserId (operador que fecha a comanda).");
+  }
+  const data = CloseComandaInputSchema.parse(input);
+
+  const comandaResult = await ctx.db.execute<ComandaRow>(
+    sql`SELECT ${COMANDA_COLS} FROM comandas WHERE id = ${data.comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const comandaRow = rows<ComandaRow>(comandaResult)[0];
+  if (!comandaRow) return { success: false, reason: "comanda_not_found" };
+  if (comandaRow.status !== "open") return { success: false, reason: "comanda_closed" };
+
+  const totalResult = await ctx.db.execute<{ total: string | null }>(
+    sql`SELECT COALESCE(SUM(quantity * unit_price_cents_at_sale), 0) AS total
+        FROM comanda_items WHERE tenant_id = ${ctx.tenantId} AND comanda_id = ${data.comandaId}`
+  );
+  const totalItemsCents = Number(rows<{ total: string | null }>(totalResult)[0]?.total ?? 0);
+  if (totalItemsCents <= 0) return { success: false, reason: "comanda_empty" };
+
+  const finalTotalCents = Math.max(0, totalItemsCents - data.discountCents);
+  const totalPaidCents = data.payments.reduce((sum, p) => sum + p.amountCents, 0);
+
+  if (totalPaidCents < finalTotalCents) {
+    return { success: false, reason: "insufficient_payment" };
+  }
+
+  // Validação de pagamentos em dinheiro e cálculo de troco
+  let totalChangeCents = 0;
+  const processedPayments: Array<{
+    method: string;
+    amountCents: number;
+    receivedCents: number | null;
+    changeCents: number;
+  }> = [];
+
+  for (const p of data.payments) {
+    let change = 0;
+    let received: number | null = p.receivedCents ?? null;
+    if (p.paymentMethod === "dinheiro") {
+      const rec = p.receivedCents ?? p.amountCents;
+      if (rec < p.amountCents) {
+        return { success: false, reason: "invalid_cash_received" };
+      }
+      change = rec - p.amountCents;
+      received = rec;
+      totalChangeCents += change;
+    }
+    processedPayments.push({
+      method: p.paymentMethod,
+      amountCents: p.amountCents,
+      receivedCents: received,
+      changeCents: change,
+    });
+  }
+
+  // Atualiza comanda atomicamente para 'closed'
+  const updateResult = await ctx.db.execute<ComandaRow>(
+    sql`UPDATE comandas SET status = 'closed', updated_at = now()
+        WHERE id = ${data.comandaId} AND tenant_id = ${ctx.tenantId} AND status = 'open'
+        RETURNING ${COMANDA_COLS}`
+  );
+  const updatedRow = rows<ComandaRow>(updateResult)[0];
+  if (!updatedRow) return { success: false, reason: "comanda_closed" };
+
+  // Grava pagamentos
+  const activeSession = await getCurrentOpenCashSession(ctx);
+  const cashSessionId = activeSession?.id ?? null;
+
+  const paymentViews: ComandaPaymentView[] = [];
+  for (const p of processedPayments) {
+    const payResult = await ctx.db.execute<ComandaPaymentRow>(
+      sql`INSERT INTO comanda_payments
+            (tenant_id, comanda_id, cash_session_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id)
+          VALUES (${ctx.tenantId}, ${data.comandaId}, ${cashSessionId}, ${p.method}, ${p.amountCents}, ${p.receivedCents}, ${p.changeCents}, ${ctx.actorUserId})
+          RETURNING id, tenant_id, comanda_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id, created_at`
+    );
+    paymentViews.push(toPaymentView(rows<ComandaPaymentRow>(payResult)[0]));
+  }
+
+  const comanda = toComanda(updatedRow);
+  await writeAudit(ctx, "pdv.comanda.closed", {
+    comandaId: comanda.id,
+    totalCents: totalItemsCents,
+    discountCents: data.discountCents,
+    finalTotalCents,
+    totalPaidCents,
+    totalChangeCents,
+  });
+
+  return { success: true, comanda, payments: paymentViews, totalChangeCents };
 }

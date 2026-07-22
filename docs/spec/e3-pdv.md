@@ -10,7 +10,6 @@ Como operador de caixa, quero abrir e fechar o caixa com conferência de valores
 
 **Critérios de Aceite:**
 *   **Abertura de Caixa:** Exige informar o valor de saldo inicial (troco) em dinheiro (em centavos/integer) e o operador responsável.
-*   **Suprimentos e Sangrias:** Exige informar o tipo da movimentação, valor em centavos, e uma justificativa obrigatória. Toda sangria ou suprimento gera um log de auditoria automático (ver `SAAS-05`).
 *   **Fechamento de Caixa:** Exige o preenchimento dos valores físicos contados em caixa divididos por meio de pagamento (Dinheiro, Pix, Cartão, Pontos). O sistema deve cruzar os dados contados com os valores esperados do sistema e exibir o resumo detalhado indicando sobras ou quebras de caixa.
 
 ---
@@ -30,6 +29,11 @@ Como operador de caixa, quero lançar produtos e serviços na comanda de um clie
     *   **Sem distinção de categoria:** O cliente criado pelo cadastro rápido é um cliente normal do CRM da arena — disponível imediatamente para busca, histórico de consumo, pontos e filiação, sem qualquer diferença em relação a um cliente cadastrado pela tela completa.
 *   **Três caminhos para iniciar a comanda:** busca de cliente existente (critério acima), cadastro rápido de cliente novo (critério acima) ou nenhuma identificação — venda balcão/anônima, cujas regras completas estão em `PDV-03`.
 *   Cada lançamento de item deve gravar internamente: ID do produto/serviço, quantidade, **valor unitário no momento do lançamento** (snapshot do preço vigente em centavos/integer), ID do operador de caixa e data/hora do lançamento. O preço gravado é imutável — alterações futuras no cadastro do produto nunca alteram registros já gravados.
+*   **Interface de Lançamento Simplificada (Acessibilidade/Toque):** A tela de seleção e adição de itens deve ser otimizada para operadores com baixa familiaridade tecnológica ou em telas de toque (tablets):
+    *   Os produtos devem ser exibidos como cards/botões grandes, organizados por categorias em abas de fácil acesso (ex.: Bebidas, Lanches, Quadras, Aulas).
+    *   A seleção deve ser feita por clique/toque direto no card do produto, onde cada clique adiciona automaticamente 1 unidade do item ao carrinho lateral.
+    *   O carrinho lateral deve permitir ajustar facilmente a quantidade (botões `+` e `-` grandes) ou remover o item antes de confirmar o lançamento.
+*   **Botão Fechar/Voltar:** A interface de lançamento/adição de itens deve conter um botão "Fechar" ou "Voltar" destacado (ex.: no cabeçalho ou como botão de canto). Ao ser clicado, ele cancela a operação atual de edição/adição de itens não confirmados e retorna o operador à visualização anterior (grade de comandas ou detalhe da comanda), sem descartar itens que já haviam sido confirmados e gravados anteriormente na comanda.
 *   **Impressão de Fichas de Produção:** Ao concluir o lançamento de um ou mais itens na comanda, se o seletor de impressão estiver ativo (ou configurado em `CAD-07`), o sistema dispara a impressão das fichas de produção/retirada em bobina térmica (fichas individuais por unidade, ver `PDV-12`).
 *   Cada lançamento bem-sucedido na comanda de um cliente com opt-in ativo dispara uma notificação WhatsApp em tempo real contendo o item adicionado e o saldo acumulado (ver regras de agrupamento de mensagens em `WPP-02`).
 
@@ -72,18 +76,34 @@ Como operador de caixa, quero lançar produtos e serviços na comanda de um clie
 Como operador de caixa, quero lançar vendas sem cliente associado (comanda avulsa/balcão), para não travar a fila de atendimento caso o cliente não queira se identificar.
 
 **Critérios de Aceite:**
-*   O PDV deve permitir a abertura de uma venda rápida diretamente no balcão sem vincular um cliente cadastrado.
+*   O PDV deve permitir a abertura de uma venda rápida diretamente no balcão sem vincular um cliente cadastrado (venda anônima).
 *   Vendas avulsas não geram pontuação de cashback nem disparam notificações WhatsApp.
 *   O sistema deve permitir a conversão de uma venda balcão/comanda avulsa em comanda identificada (vinculando um cliente cadastrado) em qualquer momento antes do fechamento/pagamento final.
+*   **Atalho de Abertura:** A venda balcão pode ser iniciada instantaneamente a partir do menu do botão flutuante de criação (`PDV-04`), abrindo diretamente a interface simplificada de lançamento de itens.
 
 ---
 
-## PDV-04 [P0] — Controle de Comandas em Aberto
+## PDV-04 [P0] — Controle de Comandas em Aberto (Visualização em Grade e Fluxo de Criação)
 **Descrição:**
-Como operador de caixa, quero que comandas possam permanecer em aberto, para que o cliente consuma ao longo de sua estadia na arena e pague somente ao final.
+Como operador de caixa, quero visualizar as comandas em aberto em uma grade compacta de fácil leitura e abrir novas comandas através de um fluxo simplificado, para gerenciar com rapidez o consumo de múltiplos clientes na arena.
 
 **Critérios de Aceite:**
-*   O PDV deve ter um painel visual listando todas as comandas atualmente abertas na arena, mostrando: nome do cliente, tempo transcorrido desde a abertura e o valor total parcial acumulado.
+*   **Grade Visual de Comandas (Grid Layout):**
+    *   As comandas ativas na arena devem ser exibidas em uma grade com cards de tamanho compacto, otimizada para acomodar o máximo possível de comandas simultaneamente na tela do operador (ideal para tablets/desktops), reduzindo a necessidade de rolagem.
+    *   **Cabeçalho do Card (Informações Visíveis):** Cada card de comanda na grade deve conter obrigatoriamente em seu cabeçalho:
+        1.  **Identificação:** Nome do cliente associado (ou "Venda Balcão #[Código]" se for comanda avulsa).
+        2.  **Tempo Aberta:** Tempo transcorrido desde a criação da comanda (ex.: "Há 15 min", "01h 45m").
+        3.  **Valor Total:** O valor total acumulado dos itens lançados em formato monetário (R$).
+    *   **Ação de Expansão/Visualização:** Clicar em qualquer card de comanda na grade abre a visualização expandida de detalhes daquela comanda, permitindo ao operador ver a lista completa de consumo, lançar novos itens ou prosseguir para o fechamento.
+*   **Regra de Unicidade por Cliente (Comanda Única):**
+    *   Um mesmo cliente (identificado por ID local/global) **não pode possuir mais de uma comanda em aberto simultaneamente** no mesmo tenant (arena).
+    *   Se o operador tentar abrir uma nova comanda para um cliente que já possui uma comanda ativa, o sistema deve bloquear a criação, exibir um alerta visual informativo destacando que o cliente já possui uma comanda em aberto e fornecer um atalho/botão para abrir diretamente a comanda existente desse cliente.
+*   **Botão Flutuante de Criação (FAB - Floating Action Button):**
+    *   Exibir um botão flutuante circular com ícone de `+` ou texto "Nova Comanda" posicionado de forma fixa e visível (ex.: no canto inferior direito) na tela de controle de comandas.
+    *   Ao clicar no botão flutuante, deve abrir um diálogo ou overlay de atalho rápido com duas opções:
+        1.  **Venda Balcão (Avulsa):** Inicia imediatamente a comanda balcão e redireciona para a tela de seleção de itens (`PDV-03`).
+        2.  **Identificar Cliente:** Exibe o campo de busca de cliente existente e botão para cadastro rápido inline (`PDV-02`).
+    *   Assim que a identificação (ou opção balcão) é selecionada, o operador é direcionado diretamente para a interface simplificada de adição de itens para aquela comanda.
 *   Ao realizar o fechamento do caixa, o sistema deve alertar o operador se houver comandas ainda em aberto. O comportamento do sistema deve ser configurável para permitir que comandas permaneçam abertas para o próximo turno/operador ou exigir o fechamento obrigatório antes de fechar o caixa.
 
 ---

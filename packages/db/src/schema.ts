@@ -270,6 +270,100 @@ export const comandaItems = pgTable(
   })
 );
 
+/**
+ * Pagamento realizado em uma comanda (PDV-07): registra a forma de pagamento,
+ * valor atribuído (centavos), valor entregue em dinheiro e troco.
+ */
+export const comandaPayments = pgTable(
+  "comanda_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    comandaId: uuid("comanda_id")
+      .notNull()
+      .references(() => comandas.id, { onDelete: "cascade" }),
+    cashSessionId: uuid("cash_session_id").references(() => cashSessions.id, { onDelete: "set null" }),
+    /** dinheiro | pix | cartao_credito | cartao_debito | pontos */
+    paymentMethod: varchar("payment_method", { length: 50 }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    receivedCents: integer("received_cents"),
+    changeCents: integer("change_cents").default(0).notNull(),
+    operatorUserId: uuid("operator_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantComandaIdx: index("comanda_payments_tenant_comanda_idx").on(t.tenantId, t.comandaId),
+    tenantSessionIdx: index("comanda_payments_tenant_session_idx").on(t.tenantId, t.cashSessionId),
+  })
+);
+
+/**
+ * Sessão / Turno de caixa (PDV-01): gerencia a abertura (troco inicial),
+ * o fechamento (contagem física e cálculo de quebra/sobra) e o operador responsável.
+ */
+export const cashSessions = pgTable(
+  "cash_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    operatorUserId: uuid("operator_user_id").notNull(),
+    closedByUserId: uuid("closed_by_user_id"),
+    /** open | closed */
+    status: varchar("status", { length: 20 }).default("open").notNull(),
+    initialCashCents: integer("initial_cash_cents").notNull(),
+    openedAt: timestamp("opened_at").defaultNow().notNull(),
+    closedAt: timestamp("closed_at"),
+    closingNotes: text("closing_notes"),
+  },
+  (t) => ({
+    tenantStatusIdx: index("cash_sessions_tenant_status_idx").on(t.tenantId, t.status),
+  })
+);
+
+/**
+ * Movimentação manual de caixa (PDV-01): sangria (retirada) ou suprimento (entrada de troco).
+ */
+export const cashMovements = pgTable(
+  "cash_movements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    cashSessionId: uuid("cash_session_id")
+      .notNull()
+      .references(() => cashSessions.id, { onDelete: "cascade" }),
+    /** sangria | suprimento */
+    type: varchar("type", { length: 20 }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    reason: text("reason").notNull(),
+    operatorUserId: uuid("operator_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantSessionIdx: index("cash_movements_tenant_session_idx").on(t.tenantId, t.cashSessionId),
+  })
+);
+
+/**
+ * Contagem física realizada no fechamento de caixa por meio de pagamento (PDV-01).
+ */
+export const cashClosingCounts = pgTable(
+  "cash_closing_counts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    cashSessionId: uuid("cash_session_id")
+      .notNull()
+      .references(() => cashSessions.id, { onDelete: "cascade" }),
+    paymentMethod: varchar("payment_method", { length: 50 }).notNull(),
+    expectedCents: integer("expected_cents").notNull(),
+    countedCents: integer("counted_cents").notNull(),
+    differenceCents: integer("difference_cents").notNull(),
+  },
+  (t) => ({
+    tenantSessionIdx: index("cash_closing_counts_tenant_session_idx").on(t.tenantId, t.cashSessionId),
+  })
+);
+
 // --- Quadras, Serviços e Aulas (CAD-03, CAD-05) -----------------------------
 
 export const courts = pgTable(
@@ -441,6 +535,10 @@ export const TENANT_SCOPED_TABLES = [
   "stock_movements",
   "comandas",
   "comanda_items",
+  "comanda_payments",
+  "cash_sessions",
+  "cash_movements",
+  "cash_closing_counts",
   "courts",
   "court_services",
   "court_time_slots",
@@ -475,6 +573,14 @@ export type Comanda = typeof comandas.$inferSelect;
 export type NewComanda = typeof comandas.$inferInsert;
 export type ComandaItem = typeof comandaItems.$inferSelect;
 export type NewComandaItem = typeof comandaItems.$inferInsert;
+export type ComandaPayment = typeof comandaPayments.$inferSelect;
+export type NewComandaPayment = typeof comandaPayments.$inferInsert;
+export type CashSession = typeof cashSessions.$inferSelect;
+export type NewCashSession = typeof cashSessions.$inferInsert;
+export type CashMovement = typeof cashMovements.$inferSelect;
+export type NewCashMovement = typeof cashMovements.$inferInsert;
+export type CashClosingCount = typeof cashClosingCounts.$inferSelect;
+export type NewCashClosingCount = typeof cashClosingCounts.$inferInsert;
 export type Court = typeof courts.$inferSelect;
 export type NewCourt = typeof courts.$inferInsert;
 export type CourtService = typeof courtServices.$inferSelect;

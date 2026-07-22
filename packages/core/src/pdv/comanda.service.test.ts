@@ -30,7 +30,7 @@ vi.mock("../product/product.service", () => ({
   debitStock: (...args: unknown[]) => debitStockMock(...args),
 }));
 
-const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda } =
+const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda, closeComanda } =
   await import("./comanda.service");
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
@@ -147,6 +147,7 @@ describe("openComanda", () => {
   it("abre comanda vinculada a um cliente existente do tenant (caminho de busca)", async () => {
     getCustomerByIdMock.mockResolvedValueOnce({ id: CUSTOMER_ID, tenantId: TENANT_ID });
     const ctx = mkQueueCtx([
+      [], // SELECT comanda aberta existente (vazio)
       [makeComandaRow({ customer_id: CUSTOMER_ID })], // INSERT comandas RETURNING
       [{}], // audit log
     ]);
@@ -157,6 +158,21 @@ describe("openComanda", () => {
     expect(result.comanda.customerId).toBe(CUSTOMER_ID);
     expect(result.comanda.status).toBe("open");
     expect(getCustomerByIdMock).toHaveBeenCalledWith(ctx, CUSTOMER_ID);
+  });
+
+  it("falha com already_has_open_comanda se o cliente já tiver uma comanda aberta", async () => {
+    getCustomerByIdMock.mockResolvedValueOnce({ id: CUSTOMER_ID, tenantId: TENANT_ID });
+    const ctx = mkQueueCtx([
+      [{ id: "comanda-existente-123" }], // SELECT id FROM comandas
+    ]);
+
+    const result = await openComanda(ctx, { customerId: CUSTOMER_ID });
+
+    assertFailure(result);
+    expect(result.reason).toBe("already_has_open_comanda");
+    if (result.reason === "already_has_open_comanda") {
+      expect(result.existingComandaId).toBe("comanda-existente-123");
+    }
   });
 
   it("abre comanda balcão/anônima quando customerId é null (PDV-03)", async () => {
@@ -340,6 +356,7 @@ describe("getComandaWithItems", () => {
         makeItemRow({ id: "item-1", quantity: 1, unit_price_cents_at_sale: 500 }),
         makeItemRow({ id: "item-2", quantity: 2, unit_price_cents_at_sale: 300 }),
       ],
+      [], // SELECT payments
     ]);
 
     const result = await getComandaWithItems(ctx, COMANDA_ID);
@@ -358,7 +375,8 @@ describe("getComandaWithItems", () => {
   it("retorna customerName/customerWhatsapp null em venda balcão (sem cliente vinculado)", async () => {
     const ctx = mkQueueCtx([
       [{ ...makeComandaRow({ customer_id: null }), customer_name: null, customer_whatsapp: null }],
-      [],
+      [], // SELECT items
+      [], // SELECT payments
     ]);
 
     const result = await getComandaWithItems(ctx, COMANDA_ID);
@@ -450,6 +468,7 @@ describe("linkCustomerToComanda", () => {
     getCustomerByIdMock.mockResolvedValueOnce({ id: CUSTOMER_ID, tenantId: TENANT_ID });
     const ctx = mkQueueCtx([
       [makeComandaRow({ customer_id: null, status: "open" })], // SELECT comanda
+      [], // SELECT comanda aberta existente (vazio)
       [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })], // UPDATE ... RETURNING
       [{}], // audit log
     ]);
@@ -458,6 +477,22 @@ describe("linkCustomerToComanda", () => {
 
     assertSuccess(result);
     expect(result.comanda.customerId).toBe(CUSTOMER_ID);
+  });
+
+  it("falha customer_already_has_open_comanda se o cliente já tiver outra comanda aberta", async () => {
+    getCustomerByIdMock.mockResolvedValueOnce({ id: CUSTOMER_ID, tenantId: TENANT_ID });
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ customer_id: null, status: "open" })], // SELECT comanda
+      [{ id: "outra-comanda-aberta-999" }], // SELECT id FROM comandas
+    ]);
+
+    const result = await linkCustomerToComanda(ctx, { comandaId: COMANDA_ID, customerId: CUSTOMER_ID });
+
+    assertFailure(result);
+    expect(result.reason).toBe("customer_already_has_open_comanda");
+    if (result.reason === "customer_already_has_open_comanda") {
+      expect(result.existingComandaId).toBe("outra-comanda-aberta-999");
+    }
   });
 
   it("falha already_identified quando a comanda já tem cliente vinculado (guarda antecipada)", async () => {
@@ -475,6 +510,7 @@ describe("linkCustomerToComanda", () => {
     getCustomerByIdMock.mockResolvedValueOnce({ id: CUSTOMER_ID, tenantId: TENANT_ID });
     const ctx = mkQueueCtx([
       [makeComandaRow({ customer_id: null, status: "open" })], // SELECT: parecia livre neste instante
+      [], // SELECT comanda aberta existente (vazio)
       [], // UPDATE ... WHERE customer_id IS NULL não afeta nenhuma linha: outro operador venceu a corrida
     ]);
 
@@ -519,5 +555,112 @@ describe("linkCustomerToComanda", () => {
     await expect(
       linkCustomerToComanda(ctx, { comandaId: COMANDA_ID, customerId: CUSTOMER_ID })
     ).rejects.toThrow(/actorUserId/);
+  });
+});
+
+describe("closeComanda (PDV-07)", () => {
+  function makePaymentRow(overrides: Partial<{ id: string; amount_cents: number; change_cents: number }> = {}) {
+    return {
+      id: "pay-1",
+      tenant_id: TENANT_ID,
+      comanda_id: COMANDA_ID,
+      payment_method: "pix",
+      amount_cents: 5000,
+      received_cents: null,
+      change_cents: 0,
+      operator_user_id: ACTOR_ID,
+      created_at: new Date("2026-07-22T14:00:00Z"),
+      ...overrides,
+    };
+  }
+
+  it("fecha comanda aberta com múltiplos meios de pagamento com sucesso", async () => {
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ status: "open" })], // SELECT comanda
+      [{ total: "5000" }], // SELECT SUM
+      [makeComandaRow({ status: "closed" })], // UPDATE comanda status = 'closed'
+      [], // SELECT current open cash session -> null
+      [makePaymentRow({ payment_method: "pix", amount_cents: 3000 })], // INSERT payment 1
+      [makePaymentRow({ id: "pay-2", payment_method: "cartao_credito", amount_cents: 2000 })], // INSERT payment 2
+      [{}], // audit log
+    ]);
+
+    const result = await closeComanda(ctx, {
+      comandaId: COMANDA_ID,
+      payments: [
+        { paymentMethod: "pix", amountCents: 3000 },
+        { paymentMethod: "cartao_credito", amountCents: 2000 },
+      ],
+    });
+
+    assertSuccess(result);
+    expect(result.comanda.status).toBe("closed");
+    expect(result.payments).toHaveLength(2);
+    expect(result.totalChangeCents).toBe(0);
+  });
+
+  it("calcula troco corretamente para pagamento em dinheiro", async () => {
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ status: "open" })],
+      [{ total: "4000" }],
+      [makeComandaRow({ status: "closed" })],
+      [], // SELECT current open cash session -> null
+      [makePaymentRow({ payment_method: "dinheiro", amount_cents: 4000, received_cents: 5000, change_cents: 1000 })],
+      [{}],
+    ]);
+
+    const result = await closeComanda(ctx, {
+      comandaId: COMANDA_ID,
+      payments: [{ paymentMethod: "dinheiro", amountCents: 4000, receivedCents: 5000 }],
+    });
+
+    assertSuccess(result);
+    expect(result.totalChangeCents).toBe(1000);
+    expect(result.payments[0].changeCents).toBe(1000);
+  });
+
+  it("falha com comanda_empty se a comanda não possui itens lançados", async () => {
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ status: "open" })],
+      [{ total: "0" }],
+    ]);
+
+    const result = await closeComanda(ctx, {
+      comandaId: COMANDA_ID,
+      payments: [{ paymentMethod: "pix", amountCents: 500 }],
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("comanda_empty");
+  });
+
+  it("falha com insufficient_payment se o total pago for menor que o valor da comanda", async () => {
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ status: "open" })],
+      [{ total: "5000" }],
+    ]);
+
+    const result = await closeComanda(ctx, {
+      comandaId: COMANDA_ID,
+      payments: [{ paymentMethod: "pix", amountCents: 3000 }],
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("insufficient_payment");
+  });
+
+  it("falha com invalid_cash_received se o valor recebido em dinheiro for menor que o valor cobrado", async () => {
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ status: "open" })],
+      [{ total: "5000" }],
+    ]);
+
+    const result = await closeComanda(ctx, {
+      comandaId: COMANDA_ID,
+      payments: [{ paymentMethod: "dinheiro", amountCents: 5000, receivedCents: 4000 }],
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("invalid_cash_received");
   });
 });

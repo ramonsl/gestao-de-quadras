@@ -22,6 +22,27 @@
       "when": 1784684956423,
       "tag": "0002_bright_flatman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1784745900000,
+      "tag": "0003_add_comanda_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1784747000000,
+      "tag": "0004_add_cash_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1784748000000,
+      "tag": "0005_add_cash_session_id_to_payments",
+      "breakpoints": true
     }
   ]
 }

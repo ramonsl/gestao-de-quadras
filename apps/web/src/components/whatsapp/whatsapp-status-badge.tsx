@@ -30,9 +30,11 @@ const STATUS_COLOR: Record<WhatsAppConnectionStatus, string> = {
 export function WhatsAppStatusBadge({
   initialStatus,
   isAdmin,
+  isCollapsed = false,
 }: {
   initialStatus: WhatsAppConnectionStatus;
   isAdmin: boolean;
+  isCollapsed?: boolean;
 }) {
   const [status, setStatus] = useState(initialStatus);
 
@@ -50,19 +52,32 @@ export function WhatsAppStatusBadge({
   }, []);
 
   const content = (
-    <span className="inline-flex items-center gap-1.5 min-w-0">
+    <span
+      className={`inline-flex items-center ${
+        isCollapsed ? "justify-center w-full" : "gap-1.5 min-w-0"
+      }`}
+      title={STATUS_LABEL[status]}
+    >
       <span
         className="w-[9px] h-[9px] rounded-full shrink-0"
         style={{ backgroundColor: STATUS_COLOR[status] }}
       />
-      <span className="text-[13.5px] font-semibold text-white/80 truncate">{STATUS_LABEL[status]}</span>
+      {!isCollapsed && (
+        <span className="text-[13.5px] font-semibold text-white/80 truncate">
+          {STATUS_LABEL[status]}
+        </span>
+      )}
     </span>
   );
 
   if (!isAdmin) return content;
 
   return (
-    <Link href="/whatsapp" className="block hover:opacity-80 transition-opacity">
+    <Link
+      href="/whatsapp"
+      className="block hover:opacity-80 transition-opacity"
+      title={isCollapsed ? STATUS_LABEL[status] : undefined}
+    >
       {content}
     </Link>
   );

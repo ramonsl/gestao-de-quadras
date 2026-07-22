@@ -286,6 +286,34 @@ export async function getCashSessionSummary(
     }
   }
 
+  // Consulta pagamentos de quitação de débitos efetuados na sessão
+  const debitPaymentsResult = await ctx.db.execute<{
+    payment_method: string;
+    total_amount: string;
+  }>(
+    sql`SELECT payment_method,
+               COALESCE(SUM(amount_cents), 0) AS total_amount
+        FROM customer_debit_payments
+        WHERE tenant_id = ${ctx.tenantId}
+          AND (
+            cash_session_id = ${cashSessionId}
+            OR (created_at >= ${cashSession.openedAt} AND created_at <= ${endTime})
+          )
+        GROUP BY payment_method`
+  );
+  const debitPaymentRows = rows<{ payment_method: string; total_amount: string }>(debitPaymentsResult);
+
+  for (const dpr of debitPaymentRows) {
+    const amt = Number(dpr.total_amount ?? 0);
+    if (dpr.payment_method === "dinheiro") {
+      expectedByMethod.dinheiro += amt;
+    } else if (expectedByMethod[dpr.payment_method] !== undefined) {
+      expectedByMethod[dpr.payment_method] += amt;
+    } else {
+      expectedByMethod[dpr.payment_method] = amt;
+    }
+  }
+
   const totalExpectedCents = Object.values(expectedByMethod).reduce((sum, val) => sum + val, 0);
 
   return {

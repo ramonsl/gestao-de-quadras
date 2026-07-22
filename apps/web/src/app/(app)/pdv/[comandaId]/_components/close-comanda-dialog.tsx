@@ -22,6 +22,8 @@ interface CloseComandaDialogProps {
   onOpenChange: (open: boolean) => void;
   comandaId: string;
   totalCents: number;
+  customerId?: string | null;
+  onTransferToDebit?: () => void;
   onSuccess: () => void;
 }
 
@@ -38,6 +40,8 @@ export function CloseComandaDialog({
   onOpenChange,
   comandaId,
   totalCents,
+  customerId,
+  onTransferToDebit,
   onSuccess,
 }: CloseComandaDialogProps) {
   const initialAmountStr = (totalCents / 100).toFixed(2).replace(".", ",");
@@ -194,6 +198,28 @@ export function CloseComandaDialog({
               }}
             >
               {errorMessage}
+            </div>
+          )}
+
+          {customerId && onTransferToDebit && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-[var(--radius-card)] flex items-center justify-between gap-2 text-xs text-amber-900">
+              <div>
+                <p className="font-bold">Cliente Identificado</p>
+                <p className="text-[11px] text-amber-800">
+                  Deseja lançar este valor como saldo devedor na conta do cliente?
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false);
+                  onTransferToDebit();
+                }}
+                className="bg-white border-amber-300 hover:bg-amber-100 text-amber-950 text-xs shrink-0 font-bold"
+              >
+                📋 Saldo Devedor
+              </Button>
             </div>
           )}
 

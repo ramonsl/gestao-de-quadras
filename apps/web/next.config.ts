@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
  * Headers de segurança aplicados a todas as rotas. O app expõe telas de login
  * por arena, então anti-clickjacking e política de referrer são obrigatórios.
  */
+const isDev = process.env.NODE_ENV !== "production";
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -16,12 +18,14 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Next injeta estilos inline; scripts inline são necessários ao runtime do App Router
-      "script-src 'self' 'unsafe-inline'",
+      // Next injeta estilos inline; scripts inline e unsafe-eval são necessários no dev mode para HMR/debugging do React
+      isDev
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+        : "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      isDev ? "connect-src 'self' ws: http: https:" : "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

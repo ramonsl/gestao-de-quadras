@@ -37,3 +37,14 @@ export {
   type AddCashMovementResult,
   type CloseCashSessionResult,
 } from "./cash-session.service";
+
+export {
+  TransferToDebitInputSchema,
+  SettleDebitInputSchema,
+  getCustomerDebitSummary,
+  transferComandaToCustomerDebit,
+  settleCustomerDebit,
+  type CustomerDebitSummary,
+  type TransferToDebitResult,
+  type SettleDebitResult,
+} from "./customer-debit.service";

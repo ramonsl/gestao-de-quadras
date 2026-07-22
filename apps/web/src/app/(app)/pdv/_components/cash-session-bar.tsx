@@ -88,7 +88,7 @@ export function CashSessionBar({ initialSession }: CashSessionBarProps) {
 
           <div className="flex items-center gap-1 text-[var(--text-3)]">
             <span>Aberto há </span>
-            <ElapsedTime fromISO={new Date(session.openedAt).toISOString()} />
+            <ElapsedTime fromISO={session.openedAt} />
           </div>
         </div>
 

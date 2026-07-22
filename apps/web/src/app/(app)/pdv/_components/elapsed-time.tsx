@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 
-function formatElapsed(fromISO: string, now: number): string {
-  const seconds = Math.max(0, Math.floor((now - new Date(fromISO).getTime()) / 1000));
+function parseTimestamp(fromVal: string | Date | number | undefined | null): number {
+  if (!fromVal) return Date.now();
+  if (fromVal instanceof Date) return fromVal.getTime();
+  const t = typeof fromVal === "number" ? fromVal : new Date(fromVal).getTime();
+  return isNaN(t) ? Date.now() : t;
+}
+
+function formatElapsed(fromVal: string | Date | number | undefined | null, now: number): string {
+  const timestamp = parseTimestamp(fromVal);
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   if (seconds < 60) return "Agora";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `há ${minutes} min`;
@@ -16,8 +24,8 @@ function formatElapsed(fromISO: string, now: number): string {
   return days === 1 ? "há 1 dia" : `há ${days} dias`;
 }
 
-/** Tempo transcorrido desde a abertura da comanda (PDV-04), atualiza sozinho. */
-export function ElapsedTime({ fromISO }: { fromISO: string }) {
+/** Tempo transcorrido desde a abertura (PDV-04), atualiza sozinho e imune a erros de data. */
+export function ElapsedTime({ fromISO }: { fromISO: string | Date | number | undefined | null }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {

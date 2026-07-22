@@ -22,6 +22,7 @@ Como operador de caixa, quero lançar produtos e serviços na comanda de um clie
 **Critérios de Aceite:**
 *   Permitir buscar e selecionar um cliente cadastrado (via busca rápida por nome ou WhatsApp) para vincular à comanda ativa.
 *   Cada lançamento de item deve gravar internamente: ID do produto/serviço, quantidade, **valor unitário no momento do lançamento** (snapshot do preço vigente em centavos/integer), ID do operador de caixa e data/hora do lançamento. O preço gravado é imutável — alterações futuras no cadastro do produto nunca alteram registros já gravados.
+*   **Impressão de Fichas de Produção:** Ao concluir o lançamento de um ou mais itens na comanda, se o seletor de impressão estiver ativo (ou configurado em `CAD-07`), o sistema dispara a impressão das fichas de produção/retirada em bobina térmica (fichas individuais por unidade, ver `PDV-12`).
 *   Cada lançamento bem-sucedido na comanda de um cliente com opt-in ativo dispara uma notificação WhatsApp em tempo real contendo o item adicionado e o saldo acumulado (ver regras de agrupamento de mensagens em `WPP-02`).
 
 ---
@@ -90,6 +91,7 @@ Como operador de caixa, quero fechar comandas permitindo dividir o pagamento em 
 *   O PDV deve permitir a divisão exata do valor total da comanda entre diferentes meios de pagamento (ex.: R$ 50,00 no cartão e R$ 20,00 em dinheiro).
 *   Caso o pagamento inclua dinheiro, o sistema deve calcular e exibir na tela o valor exato do troco com base no valor recebido.
 *   Descontos concedidos por filiação ativa do cliente (ver `FIL-01`) devem ser aplicados automaticamente no cálculo do total da comanda antes do encerramento, sem necessidade de interferência manual do caixa.
+*   **Impressão de Extrato Consolidado:** O PDV permite imprimir o comprovante/extrato completo da comanda contendo a discriminação de todos os itens consumidos, descontos, resumo de pontos e meios de pagamento no momento da conferência ou encerramento (ver `PDV-12`).
 
 ---
 
@@ -124,3 +126,38 @@ Como operador de caixa, quero transferir itens lançados incorretamente de uma c
 *   Permitir selecionar um ou mais itens específicos de uma comanda ativa e transferi-los para outra comanda aberta (identificando a comanda de destino por número ou nome do cliente).
 *   A transferência move o item mantendo todos os metadados (operador original que lançou e timestamp original de lançamento).
 *   A ação recalcula automaticamente os saldos parciais de ambas as comandas e dispara as notificações de correção via WhatsApp aos clientes envolvidos (caso tenham opt-in ativo).
+
+---
+
+## PDV-12 [P0] — Impressão Térmica de Fichas de Produção e Extrato de Comanda
+**Descrição:**
+Como operador de caixa, quero imprimir fichas individuais de produção (para que o cliente apresente na cozinha/bar e retire seus produtos) e o extrato consolidado da comanda (para conferência e pagamento final), diretamente em impressora térmica local sem janelas de confirmação desnecessárias.
+
+**Critérios de Aceite:**
+*   **Abordagem Técnica de Impressão:** A impressão utiliza HTML/CSS nativo via `@media print`, otimizado para navegadores executando em modo Kiosk (`--kiosk-printing`), enviando o cupom instantaneamente para a impressora térmica padrão configurada no sistema operacional.
+*   **Adaptação ao Tamanho da Bobina:** As dimensões físicas do comprovante devem adaptar-se dinamicamente ao tamanho configurado no tenant (`58mm` ou `80mm`, ver `CAD-07`).
+*   **Controle de Impressão no Lançamento (Fichas de Produção):**
+    *   No PDV, haverá um seletor/toggle "Imprimir ficha de produção" visível na tela de lançamento.
+    *   O estado inicial deste seletor respeita a configuração padrão da arena (`auto_print_production_tickets` em `CAD-07`), podendo ser alterado manualmente pelo operador no momento do lançamento.
+*   **Regra de Fichas Individuais por Unidade (Item a Item):**
+    *   Sempre que um lançamento contiver quantidade maior que 1 (ex.: 2 unidades de "Coca-Cola 350ml" ou 3 unidades de "Hambúrguer Artesanal"), o sistema **DEVE gerar e disparar impressões separadas de 1 unidade por ficha** (ex.: 1ª ficha contendo 1x Coca-Cola, e 2ª ficha contendo 1x Coca-Cola).
+    *   **Justificativa Operacional:** As fichas são destacáveis e entregues ao cliente para troca/retirada na cozinha ou bar em momentos distintos ao longo da sua permanência na arena.
+    *   Cada ficha individual de produção deve conter de forma legível:
+        1. Nome da Arena;
+        2. Identificador do item (ex.: "1x Coca-Cola 350ml");
+        3. Identificação da Comanda e Nome do Cliente (ou "Venda Balcão");
+        4. Data/Hora exata do lançamento;
+        5. Identificador da Ficha/Sequencial (ex.: "Ficha 1 de 2");
+        6. Nome/ID do operador de caixa.
+*   **Extrato Consolidado de Comanda (Conferência e Fechamento):**
+    *   Disponível para acionamento pelo operador a qualquer momento na tela da comanda ("Imprimir Extrato") e disparado automaticamente no encerramento da comanda (se configurado).
+    *   O extrato consolidado reúne todo o consumo histórico acumulado da comanda em um único documento, contendo:
+        1. Cabeçalho da Arena (Nome, CNPJ, Endereço);
+        2. Número da Comanda, Nome do Cliente e CPF (se informado);
+        3. Lista consolidada dos itens lançados (agrupados por item com Quantidade Total, Preço Unitário Snapshot e Valor Total);
+        4. Subtotal da comanda;
+        5. Descontos aplicados (ex.: desconto automático de filiado — `FIL-01`);
+        6. Resumo de pontos/cashback (pontos utilizados como pagamento e pontos creditados na compra — `PTS-01`/`PDV-08`);
+        7. Meio(s) de pagamento utilizado(s) e valor troco (se houver);
+        8. Mensagem de rodapé configurada pelo tenant.
+

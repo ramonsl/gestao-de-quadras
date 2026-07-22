@@ -82,3 +82,15 @@ Como cliente, quero poder atualizar meus dados pessoais globais (nome, e-mail, f
     2. Remover (ou anonimizar) os registros locais do cliente em todos os tenants onde ele estava vinculado.
     3. Registrar a data e o canal da solicitação de exclusão em log de auditoria permanente (o registro do pedido de exclusão deve ser preservado, não excluído).
     4. Enviar confirmação ao e-mail do cliente (se disponível) de que a exclusão foi processada.
+
+---
+
+## CAD-07 [P0] — Configurações de Impressão Térmica do Tenant
+**Descrição:**
+Como administrador da arena, quero configurar os parâmetros da impressora térmica do PDV (tamanho do papel e comportamento padrão de impressão), para que as fichas de produção e os comprovantes sejam impressos no formato correto da arena.
+
+**Critérios de Aceite:**
+*   **Tamanho do Papel da Impressora:** Permitir escolher entre `58mm` e `80mm` (padrão do sistema: `80mm`). O layout CSS dos comprovantes (`@media print`) deve adaptar dinamicamente suas margens e larguras conforme essa configuração.
+*   **Modo Padrão de Impressão no Lançamento:** Permitir configurar uma flag booleana `auto_print_production_tickets` ("Imprimir fichas de produção automaticamente ao lançar itens no PDV"). Quando habilitada, o PDV aciona a impressão de fichas de produção imediatamente após o lançamento sem exigir confirmação adicional do operador.
+*   **Personalização de Cabeçalho e Rodapé:** Permitir configurar o texto de cabeçalho (ex.: Nome Fantasia da Arena, CNPJ) e mensagem de rodapé (ex.: "Obrigado pela preferência!", regras de troca ou QR Code de avaliação) impressos nos comprovantes consolidados de comanda.
+

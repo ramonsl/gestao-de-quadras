@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { getOrCreateConnection, updateConnection, toSnapshot } from "./connection-repository";
 import { createFakeArenaDb } from "../test/fake-arena-db";
+import type { ArenaDb } from "../db-types";
 
 const TENANT_A = "11111111-1111-1111-1111-111111111111";
 const TENANT_B = "22222222-2222-2222-2222-222222222222";
@@ -30,6 +31,41 @@ describe("getOrCreateConnection", () => {
     await getOrCreateConnection({ db: fake.db, tenantId: TENANT_B });
 
     expect(fake.connections.size).toBe(2);
+  });
+
+  it("converte timestamps para Date mesmo quando o driver devolve string (neon-http via db.execute cru)", async () => {
+    // `db.execute(sql...)` sem schema tipado devolve timestamps como string
+    // (ex.: "2026-01-01 00:00:00.123456"), não como Date — reproduz esse formato.
+    const db: ArenaDb = {
+      execute: async () => ({
+        rows: [
+          {
+            id: "conn-1",
+            tenant_id: TENANT_A,
+            status: "connected",
+            phone_number: "+5511999999999",
+            qr_code: null,
+            qr_generated_at: null,
+            connected_at: "2026-01-01 00:00:00.123456",
+            last_disconnected_at: null,
+            disconnect_reason: null,
+            reconnect_attempts: 0,
+            permanent_alert_sent_at: null,
+            created_at: "2026-01-01 00:00:00.123456",
+            updated_at: "2026-01-02 10:30:00.654321",
+          },
+        ],
+      }),
+    };
+
+    const record = await getOrCreateConnection({ db, tenantId: TENANT_A });
+
+    expect(record.updatedAt).toBeInstanceOf(Date);
+    expect(record.connectedAt).toBeInstanceOf(Date);
+    expect(record.createdAt).toBeInstanceOf(Date);
+    // toSnapshot() chama .toISOString() direto — quebraria se updatedAt ainda fosse string.
+    expect(() => toSnapshot(record)).not.toThrow();
+    expect(toSnapshot(record).updatedAt).toBe("2026-01-02T10:30:00.654Z");
   });
 });
 

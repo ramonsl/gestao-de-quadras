@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Boom } from "@hapi/boom";
 import { DisconnectReason, type ConnectionState } from "@whiskeysockets/baileys";
-import { WhatsAppSessionPool, type SocketFactory } from "./session-pool";
+import { WhatsAppSessionPool, type SocketFactory, type VersionFetcher } from "./session-pool";
 import { createFakeArenaDb } from "../test/fake-arena-db";
 
 const TENANT_A = "11111111-1111-1111-1111-111111111111";
+
+/** Nunca bate na rede real — fetchLatestBaileysVersion() não roda em testes unitários. */
+const noNetworkVersionFetcher: VersionFetcher = async () => undefined;
 
 /** Socket falso mínimo — suficiente para exercitar o pool sem Baileys/rede real. */
 function createFakeSocket() {
@@ -48,7 +51,7 @@ describe("WhatsAppSessionPool", () => {
       sockets.push(s);
       return s as unknown as ReturnType<SocketFactory>;
     };
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
     const events: string[] = [];
     pool.onEvent((e) => events.push(e.snapshot.status));
 
@@ -66,7 +69,7 @@ describe("WhatsAppSessionPool", () => {
   it("connect() é idempotente — não abre 2 sockets para o mesmo tenant", async () => {
     const fake = createFakeArenaDb();
     const factory: SocketFactory = vi.fn(() => createFakeSocket() as unknown as ReturnType<SocketFactory>);
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
 
     await pool.connect({ db: fake.db, tenantId: TENANT_A });
     await pool.connect({ db: fake.db, tenantId: TENANT_A });
@@ -82,7 +85,7 @@ describe("WhatsAppSessionPool", () => {
       socket.user = { id: "5511999999999:12@s.whatsapp.net" };
       return socket as unknown as ReturnType<SocketFactory>;
     };
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
 
     await pool.connect({ db: fake.db, tenantId: TENANT_A });
     socket!.emitConnectionUpdate({ connection: "open" });
@@ -103,7 +106,7 @@ describe("WhatsAppSessionPool", () => {
       sockets.push(s);
       return s as unknown as ReturnType<SocketFactory>;
     };
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
 
     await pool.connect({ db: fake.db, tenantId: TENANT_A });
     sockets[0].emitConnectionUpdate({ connection: "close", lastDisconnect: { error: transientError(), date: new Date() } });
@@ -126,7 +129,7 @@ describe("WhatsAppSessionPool", () => {
       sockets.push(s);
       return s as unknown as ReturnType<SocketFactory>;
     };
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
 
     await pool.connect({ db: fake.db, tenantId: TENANT_A });
     fake.creds.set(TENANT_A, '{"registered":true}');
@@ -157,7 +160,7 @@ describe("WhatsAppSessionPool", () => {
       sockets.push(s);
       return s as unknown as ReturnType<SocketFactory>;
     };
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
     const permanentEvents: string[] = [];
     pool.onEvent((e) => {
       if (e.permanentDisconnect) permanentEvents.push(e.tenantId);
@@ -183,7 +186,7 @@ describe("WhatsAppSessionPool", () => {
     const fake = createFakeArenaDb();
     const socket = createFakeSocket();
     const factory: SocketFactory = () => socket as unknown as ReturnType<SocketFactory>;
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
 
     await pool.connect({ db: fake.db, tenantId: TENANT_A });
     fake.creds.set(TENANT_A, '{"registered":true}');
@@ -198,7 +201,7 @@ describe("WhatsAppSessionPool", () => {
   it("bootstrap() só retoma tenants com status elegível (connected/connecting/qr_pending)", async () => {
     const fake = createFakeArenaDb();
     const factory: SocketFactory = vi.fn(() => createFakeSocket() as unknown as ReturnType<SocketFactory>);
-    const pool = new WhatsAppSessionPool(factory);
+    const pool = new WhatsAppSessionPool(factory, noNetworkVersionFetcher);
 
     const TENANT_ELIGIBLE = "33333333-3333-3333-3333-333333333333";
     const TENANT_SKIPPED = "44444444-4444-4444-4444-444444444444";

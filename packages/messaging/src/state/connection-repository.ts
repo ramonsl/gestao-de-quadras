@@ -3,6 +3,22 @@ import type { ArenaDb, TenantRef } from "../db-types";
 import { rows } from "../db-types";
 import type { WhatsAppConnectionSnapshot, WhatsAppConnectionStatus } from "../types";
 
+/**
+ * Postgres devolve `timestamp without time zone` como string sem sufixo de
+ * fuso (ex.: "2026-01-02 10:30:00.654321") — todas as colunas de timestamp
+ * deste projeto são gravadas via `now()` (UTC). `new Date(str)` sem "Z"
+ * interpretaria isso como hora local da máquina, não UTC. Aceita `Date`/`number`
+ * também porque o fake de teste (`fake-arena-db.ts`) extrai parâmetros `Date`
+ * via `.valueOf()`, que devolve epoch em ms, não a string do driver real.
+ */
+function parseTimestamp(value: string | Date | number): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === "number") return new Date(value);
+  const hasTimezone = /[Zz]|[+-]\d{2}:?\d{2}$/.test(value);
+  const iso = value.includes("T") ? value : value.replace(" ", "T");
+  return new Date(hasTimezone ? iso : `${iso}Z`);
+}
+
 export interface WhatsAppConnectionRecord {
   id: string;
   tenantId: string;
@@ -19,20 +35,27 @@ export interface WhatsAppConnectionRecord {
   updatedAt: Date;
 }
 
+/**
+ * `db.execute()` cru (sem schema tipado) devolve timestamps como string
+ * (formato `timestamp without time zone` do Postgres), não como `Date` — o
+ * driver só faz essa conversão via query builder tipado do Drizzle. Os fakes
+ * de teste devolvem `Date` diretamente. `toRecord()` normaliza os dois casos
+ * via `parseTimestamp()` antes de expor ao chamador.
+ */
 type ConnectionRow = {
   id: string;
   tenant_id: string;
   status: WhatsAppConnectionStatus;
   phone_number: string | null;
   qr_code: string | null;
-  qr_generated_at: Date | null;
-  connected_at: Date | null;
-  last_disconnected_at: Date | null;
+  qr_generated_at: string | Date | number | null;
+  connected_at: string | Date | number | null;
+  last_disconnected_at: string | Date | number | null;
   disconnect_reason: string | null;
   reconnect_attempts: number;
-  permanent_alert_sent_at: Date | null;
-  created_at: Date;
-  updated_at: Date;
+  permanent_alert_sent_at: string | Date | number | null;
+  created_at: string | Date | number;
+  updated_at: string | Date | number;
 };
 
 const COLUMNS = sql`id, tenant_id, status, phone_number, qr_code, qr_generated_at, connected_at,
@@ -45,14 +68,14 @@ function toRecord(row: ConnectionRow): WhatsAppConnectionRecord {
     status: row.status,
     phoneNumber: row.phone_number,
     qrCode: row.qr_code,
-    qrGeneratedAt: row.qr_generated_at,
-    connectedAt: row.connected_at,
-    lastDisconnectedAt: row.last_disconnected_at,
+    qrGeneratedAt: row.qr_generated_at ? parseTimestamp(row.qr_generated_at) : null,
+    connectedAt: row.connected_at ? parseTimestamp(row.connected_at) : null,
+    lastDisconnectedAt: row.last_disconnected_at ? parseTimestamp(row.last_disconnected_at) : null,
     disconnectReason: row.disconnect_reason,
     reconnectAttempts: row.reconnect_attempts,
-    permanentAlertSentAt: row.permanent_alert_sent_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    permanentAlertSentAt: row.permanent_alert_sent_at ? parseTimestamp(row.permanent_alert_sent_at) : null,
+    createdAt: parseTimestamp(row.created_at),
+    updatedAt: parseTimestamp(row.updated_at),
   };
 }
 

@@ -86,6 +86,32 @@ describe("getWhatsAppConnectionStatus", () => {
     const mock = makeMockDb();
     await expect(getWhatsAppConnectionStatus(makeCtx(mock.db, "not-a-uuid"))).rejects.toThrow();
   });
+
+  it("converte updated_at para Date mesmo quando o driver devolve string (neon-http via db.execute cru)", async () => {
+    // `db.execute(sql...)` sem schema tipado devolve timestamps como string
+    // (ex.: "2026-01-01 00:00:00.123456"), não como Date — reproduz esse formato.
+    const db = {
+      execute: async () => ({
+        rows: [
+          {
+            status: "connected",
+            qr_code: null,
+            phone_number: "+5511999999999",
+            connected_at: "2026-01-01 00:00:00.123456",
+            last_disconnected_at: null,
+            reconnect_attempts: 0,
+            updated_at: "2026-01-02 10:30:00.654321",
+          },
+        ],
+      }),
+    } as unknown as WhatsAppConnectionContext["db"];
+
+    const result = await getWhatsAppConnectionStatus(makeCtx(db));
+
+    expect(result.updatedAt).toBeInstanceOf(Date);
+    expect(result.updatedAt.toISOString()).toBe("2026-01-02T10:30:00.654Z");
+    expect(result.connectedAt).toBeInstanceOf(Date);
+  });
 });
 
 describe("requestWhatsAppConnect", () => {

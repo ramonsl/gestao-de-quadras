@@ -1,6 +1,21 @@
 import { sql } from "drizzle-orm";
 import { assertTenantId, rows, type ArenaDb } from "../db/tenant";
 
+/**
+ * Postgres devolve `timestamp without time zone` como string sem sufixo de
+ * fuso (ex.: "2026-01-02 10:30:00.654321") — todas as colunas de timestamp
+ * deste projeto são gravadas via `now()` (UTC). `new Date(str)` sem "Z"
+ * interpretaria isso como hora local da máquina, não UTC. Aceita `Date`
+ * também porque os mocks de teste já devolvem `Date`.
+ */
+function parseTimestamp(value: string | Date | number): Date {
+  if (value instanceof Date) return value;
+  if (typeof value === "number") return new Date(value);
+  const hasTimezone = /[Zz]|[+-]\d{2}:?\d{2}$/.test(value);
+  const iso = value.includes("T") ? value : value.replace(" ", "T");
+  return new Date(hasTimezone ? iso : `${iso}Z`);
+}
+
 export type WhatsAppConnectionStatus =
   | "disconnected"
   | "connecting"
@@ -41,14 +56,21 @@ export interface WhatsAppControlQueuePort {
   enqueue(job: WhatsAppControlJob): Promise<void>;
 }
 
+/**
+ * `db.execute()` cru (sem schema tipado) devolve timestamps como string
+ * (formato `timestamp without time zone` do Postgres), não como `Date` — o
+ * driver só faz essa conversão via query builder tipado do Drizzle. Os mocks
+ * de teste devolvem `Date` diretamente. `toView()` normaliza os dois casos
+ * via `parseTimestamp()` antes de expor ao chamador.
+ */
 type ConnectionRow = {
   status: WhatsAppConnectionStatus;
   qr_code: string | null;
   phone_number: string | null;
-  connected_at: Date | null;
-  last_disconnected_at: Date | null;
+  connected_at: string | Date | number | null;
+  last_disconnected_at: string | Date | number | null;
   reconnect_attempts: number;
-  updated_at: Date;
+  updated_at: string | Date | number;
 };
 
 const COLUMNS = sql`status, qr_code, phone_number, connected_at, last_disconnected_at, reconnect_attempts, updated_at`;
@@ -68,10 +90,10 @@ function toView(row: ConnectionRow): WhatsAppConnectionStatusView {
     status: row.status,
     qrCode: row.qr_code,
     phoneNumber: row.phone_number,
-    connectedAt: row.connected_at,
-    lastDisconnectedAt: row.last_disconnected_at,
+    connectedAt: row.connected_at ? parseTimestamp(row.connected_at) : null,
+    lastDisconnectedAt: row.last_disconnected_at ? parseTimestamp(row.last_disconnected_at) : null,
     reconnectAttempts: row.reconnect_attempts,
-    updatedAt: row.updated_at,
+    updatedAt: parseTimestamp(row.updated_at),
   };
 }
 

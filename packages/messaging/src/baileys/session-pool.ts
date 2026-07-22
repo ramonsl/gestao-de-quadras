@@ -1,6 +1,8 @@
 import makeWASocket, {
   DisconnectReason,
+  fetchLatestBaileysVersion,
   type ConnectionState,
+  type WAVersion,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import type { Boom } from "@hapi/boom";
@@ -20,9 +22,18 @@ export type SessionPoolEventHandler = (event: SessionPoolEvent) => void;
 /** Fábrica de socket injetável — permite testar o pool sem abrir conexão real com o WhatsApp. */
 export type SocketFactory = (params: {
   auth: Awaited<ReturnType<typeof usePostgresAuthState>>["state"];
+  version?: WAVersion;
 }) => WASocket;
 
-const defaultSocketFactory: SocketFactory = ({ auth }) => makeWASocket({ auth });
+const defaultSocketFactory: SocketFactory = ({ auth, version }) => makeWASocket({ auth, version });
+
+/** Busca injetável — permite testar o pool sem chamada de rede real. */
+export type VersionFetcher = () => Promise<WAVersion | undefined>;
+
+const defaultVersionFetcher: VersionFetcher = () =>
+  fetchLatestBaileysVersion()
+    .then(({ version }) => version)
+    .catch(() => undefined); // fallback pro default baked-in do Baileys se o fetch falhar
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,8 +62,17 @@ export class WhatsAppSessionPool {
    * outro connect assumiu), o retry aborta em vez de abrir um socket "fantasma".
    */
   private readonly generations = new Map<string, number>();
+  /**
+   * A versão do WhatsApp Web baked-in no Baileys fica desatualizada rápido —
+   * a WhatsApp rejeita o handshake Noise e a conexão nunca chega a gerar QR.
+   * Busca a versão atual uma vez por processo e reaproveita entre tenants.
+   */
+  private versionPromise: Promise<WAVersion | undefined> | null = null;
 
-  constructor(private readonly createSocket: SocketFactory = defaultSocketFactory) {}
+  constructor(
+    private readonly createSocket: SocketFactory = defaultSocketFactory,
+    private readonly fetchVersion: VersionFetcher = defaultVersionFetcher
+  ) {}
 
   onEvent(handler: SessionPoolEventHandler): () => void {
     this.listeners.add(handler);
@@ -71,6 +91,13 @@ export class WhatsAppSessionPool {
     const next = this.currentGeneration(tenantId) + 1;
     this.generations.set(tenantId, next);
     return next;
+  }
+
+  private resolveVersion(): Promise<WAVersion | undefined> {
+    if (!this.versionPromise) {
+      this.versionPromise = this.fetchVersion();
+    }
+    return this.versionPromise;
   }
 
   /** Retoma, no boot do worker, as arenas cuja sessão estava ativa antes do restart/deploy. */
@@ -92,10 +119,11 @@ export class WhatsAppSessionPool {
     const generation = this.bumpGeneration(ref.tenantId);
 
     const { state, saveCreds } = await usePostgresAuthState(ref);
+    const version = await this.resolveVersion();
     const connecting = await updateConnection(ref, { status: "connecting" });
     this.emit({ tenantId: ref.tenantId, snapshot: toSnapshot(connecting) });
 
-    const socket = this.createSocket({ auth: state });
+    const socket = this.createSocket({ auth: state, version });
     this.sessions.set(ref.tenantId, { socket });
 
     socket.ev.on("creds.update", saveCreds);

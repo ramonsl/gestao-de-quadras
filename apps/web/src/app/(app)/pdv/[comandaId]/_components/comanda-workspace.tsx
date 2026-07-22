@@ -281,7 +281,7 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
           <div className="flex items-center gap-2 text-xs text-[var(--text-3)] mt-0.5">
             {customerWhatsapp && <span>{customerWhatsapp} •</span>}
             <span>Aberto </span>
-            <ElapsedTime fromISO={initialComanda.openedAt} />
+            <ElapsedTime fromISO={initialComanda.createdAt} />
           </div>
         </div>
 

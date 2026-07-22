@@ -13,6 +13,8 @@ import {
   GraduationCap,
   ShieldCheck,
   MessageSquare,
+  Megaphone,
+  Building2,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -88,6 +90,20 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
             href: "/admin/pacotes-aulas",
             label: "Pacotes de Aulas",
             icon: GraduationCap,
+          },
+        ]
+      : []),
+    ...(canAccess("publicidade")
+      ? [
+          {
+            href: "/admin/publicidade/espacos",
+            label: "Espaços Publicitários",
+            icon: Megaphone,
+          },
+          {
+            href: "/admin/publicidade/anunciantes",
+            label: "Anunciantes",
+            icon: Building2,
           },
         ]
       : []),

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/session";
+import { requireSession, arenaContext } from "@/lib/session";
+import { getWhatsAppConnectionStatus } from "@gestao-de-quadras/core/whatsapp/whatsapp-connection.service";
+import { WhatsAppStatusBadge } from "@/components/whatsapp/whatsapp-status-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const modules = session.modulesAllowed ?? [];
 
   const canAccess = (moduleName: string) => isAdmin || modules.includes(moduleName);
+
+  const whatsappStatus = await getWhatsAppConnectionStatus(
+    arenaContext({ id: session.userId, tenantId: session.tenantId })
+  );
 
   return (
     <div className="min-h-dvh flex bg-[var(--bg-app)]">
@@ -28,6 +34,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             A
           </span>
           <span className="text-sm font-semibold truncate">{session.tenantSlug}</span>
+        </div>
+
+        <div className="px-4 py-2.5 border-b border-white/10">
+          <WhatsAppStatusBadge initialStatus={whatsappStatus.status} isAdmin={isAdmin} />
         </div>
 
         <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto">

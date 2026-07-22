@@ -18,3 +18,17 @@ export interface WhatsAppConnectionSnapshot {
   reconnectAttempts: number;
   updatedAt: string;
 }
+
+/**
+ * Recorte do snapshot seguro para QUALQUER operador autenticado da arena
+ * (não só Admin) — usado no indicador global de status. Nunca inclui
+ * `qrCode` (segredo de pareamento) nem `phoneNumber`, que continuam
+ * restritos ao painel `/whatsapp` (admin-only).
+ */
+export interface WhatsAppPublicStatus {
+  status: WhatsAppConnectionStatus;
+}
+
+export function toPublicStatus(snapshot: WhatsAppConnectionSnapshot): WhatsAppPublicStatus {
+  return { status: snapshot.status };
+}

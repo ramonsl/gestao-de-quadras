@@ -43,8 +43,9 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 
-# Migrations: bundle + SQLs. Aplicadas no deploy via Pre-deployment Command do
-# Coolify (`node db-migrate.cjs`), com DATABASE_URL vindo do ambiente.
+# Migrations: bundle self-contained + SQLs. Aplicadas no START do container
+# (ver CMD abaixo), com DATABASE_URL vindo do ambiente. NÃO usar como
+# Pre-deployment Command no Coolify — ele roda antes do build, na imagem antiga.
 COPY --from=builder /app/db-migrate.cjs ./db-migrate.cjs
 COPY --from=builder /app/packages/db/drizzle ./drizzle
 ENV MIGRATIONS_DIR=/app/drizzle
@@ -53,4 +54,8 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "apps/web/server.js"]
+# Aplica as migrations no START do container (a imagem nova já contém o bundle
+# e a pasta drizzle) e só então sobe o servidor. Se a migration falhar, o
+# container não sobe → o healthcheck falha e o Coolify mantém a versão anterior.
+# `exec` garante que os sinais (SIGTERM) cheguem ao Next server.
+CMD ["sh", "-c", "node /app/db-migrate.cjs && exec node apps/web/server.js"]

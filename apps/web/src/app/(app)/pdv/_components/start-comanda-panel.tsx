@@ -17,13 +17,18 @@ export function StartComandaPanel() {
   async function openWithCustomer(customerId: string | null) {
     setIsOpening(true);
     setErrorMessage(null);
-    const result = await openComandaAction(customerId);
-    if (!result.success) {
-      setErrorMessage(result.message);
+    try {
+      const result = await openComandaAction(customerId);
+      if (!result.success) {
+        setErrorMessage(result.message);
+        setIsOpening(false);
+        return;
+      }
+      router.push(`/pdv/${result.comandaId}`);
+    } catch {
+      setErrorMessage("Não foi possível abrir a comanda. Tente novamente.");
       setIsOpening(false);
-      return;
     }
-    router.push(`/pdv/${result.comandaId}`);
   }
 
   function handleCustomerCreated(customer: { id: string }) {

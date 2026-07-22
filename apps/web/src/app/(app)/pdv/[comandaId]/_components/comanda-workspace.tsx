@@ -37,30 +37,39 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
   async function handleAddItem(productId: string, quantity: number) {
     setIsAdding(true);
     setErrorMessage(null);
-    const result = await addItemAction(comandaId, productId, quantity);
-    setIsAdding(false);
-    if (!result.success) {
-      setErrorMessage(
-        result.reason === "product_not_found"
-          ? "Produto não encontrado."
-          : "Não foi possível lançar o item — a comanda pode estar fechada."
-      );
-      return;
+    try {
+      const result = await addItemAction(comandaId, productId, quantity);
+      if (!result.success) {
+        setErrorMessage(
+          result.reason === "product_not_found"
+            ? "Produto não encontrado."
+            : "Não foi possível lançar o item — a comanda pode estar fechada."
+        );
+        return;
+      }
+      setItems((prev) => [...prev, result.item]);
+      setTotalCents(result.comandaTotalCents);
+    } catch {
+      setErrorMessage("Não foi possível lançar o item. Tente novamente.");
+    } finally {
+      setIsAdding(false);
     }
-    setItems((prev) => [...prev, result.item]);
-    setTotalCents(result.comandaTotalCents);
   }
 
   async function handleLinkCustomer(customer: CustomerSearchResult) {
-    const result = await linkCustomerAction(comandaId, customer.id);
-    if (!result.success) {
-      setErrorMessage("Não foi possível vincular o cliente — a comanda já pode estar identificada.");
-      return;
+    try {
+      const result = await linkCustomerAction(comandaId, customer.id);
+      if (!result.success) {
+        setErrorMessage("Não foi possível vincular o cliente — a comanda já pode estar identificada.");
+        return;
+      }
+      setCustomerId(customer.id);
+      setCustomerName(customer.name);
+      setCustomerWhatsapp(customer.whatsapp);
+      setLinkDialogOpen(false);
+    } catch {
+      setErrorMessage("Não foi possível vincular o cliente. Tente novamente.");
     }
-    setCustomerId(customer.id);
-    setCustomerName(customer.name);
-    setCustomerWhatsapp(customer.whatsapp);
-    setLinkDialogOpen(false);
   }
 
   function handleCustomerCreatedForLink(customer: QuickCreatedCustomer) {

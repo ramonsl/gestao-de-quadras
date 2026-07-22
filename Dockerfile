@@ -23,6 +23,12 @@ ENV NODE_ENV=production
 
 RUN npm run build --workspace=apps/web
 
+# Runner de migrations self-contained (um único .cjs com drizzle + neon embutidos),
+# usado pelo Pre-deployment Command do Coolify. Não depende de node_modules no runner.
+RUN node_modules/.bin/esbuild packages/db/src/migrate.ts \
+    --bundle --platform=node --target=node22 --format=cjs \
+    --outfile=/app/db-migrate.cjs
+
 FROM base AS runner
 WORKDIR /app
 
@@ -36,6 +42,12 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+
+# Migrations: bundle + SQLs. Aplicadas no deploy via Pre-deployment Command do
+# Coolify (`node db-migrate.cjs`), com DATABASE_URL vindo do ambiente.
+COPY --from=builder /app/db-migrate.cjs ./db-migrate.cjs
+COPY --from=builder /app/packages/db/drizzle ./drizzle
+ENV MIGRATIONS_DIR=/app/drizzle
 
 USER nextjs
 

@@ -20,6 +20,11 @@ import type { CustomerSearchResult } from "../../_actions/search-customers.actio
 import { linkCustomerAction } from "../_actions/link-customer.action";
 import { addItemsAction } from "../_actions/add-items.action";
 import { ElapsedTime } from "../../_components/elapsed-time";
+import { SettleDebitDialog } from "../../_components/settle-debit-dialog";
+import {
+  getCustomerDebitSummaryAction,
+  transferComandaToCustomerDebitAction,
+} from "../../_actions/customer-debit.actions";
 
 interface ComandaWorkspaceProps {
   comanda: ComandaWithItems;
@@ -65,12 +70,49 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
   const [pendingCart, setPendingCart] = useState<PendingItem[]>([]);
 
+  const [pendingDebitCents, setPendingDebitCents] = useState(0);
+  const [isSettleDebitOpen, setSettleDebitOpen] = useState(false);
+
+  useEffect(() => {
+    if (customerId) {
+      void getCustomerDebitSummaryAction(customerId).then((summary) => {
+        setPendingDebitCents(summary.totalPendingCents);
+      });
+    } else {
+      setPendingDebitCents(0);
+    }
+  }, [customerId]);
+
   const [isLinkDialogOpen, setLinkDialogOpen] = useState(false);
   const [isQuickCreateOpen, setQuickCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isClosed = status === "closed";
+
+  async function handleTransferToDebit() {
+    if (!customerId || isClosed) return;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const res = await transferComandaToCustomerDebitAction(comandaId, customerId);
+      if (!res.success) {
+        setErrorMessage(
+          res.reason === "limit_exceeded"
+            ? `O cliente excedeu o limite máximo de saldo devedor (R$ ${(res.maxLimitCents! / 100).toFixed(2).replace(".", ",")}).`
+            : "Não foi possível transferir a comanda para o saldo devedor."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+      setStatus("closed");
+      router.refresh();
+    } catch {
+      setErrorMessage("Erro ao transferir comanda. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   // Manipulação do Carrinho Temporário (Pendentes)
   function handleSelectProduct(product: Product) {
@@ -193,6 +235,28 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
           <span>Voltar para a Grade de Comandas</span>
         </Link>
       </div>
+
+      {/* Alerta de Saldo Devedor Pendente */}
+      {pendingDebitCents > 0 && customerId && (
+        <div className="p-3 bg-amber-50 border border-amber-300 rounded-[var(--radius-card)] flex flex-wrap items-center justify-between gap-3 text-amber-950 shadow-sm">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-base">⚠️</span>
+            <div>
+              <p className="font-bold">Cliente com Saldo Devedor Pendente</p>
+              <p className="text-[11px] text-amber-800">
+                Este cliente possui {formatCentsToBRL(pendingDebitCents)} pendentes em conta de visitas anteriores.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => setSettleDebitOpen(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8"
+          >
+            💳 Quitar Débito Agora
+          </Button>
+        </div>
+      )}
 
       {/* Cabeçalho da Comanda */}
       <div className="flex items-center justify-between flex-wrap gap-4 p-4 bg-white border border-[var(--border)] rounded-[var(--radius-card)] shadow-sm">
@@ -511,8 +575,26 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
         onOpenChange={setIsCloseDialogOpen}
         comandaId={comandaId}
         totalCents={totalCents}
+        customerId={customerId}
+        onTransferToDebit={() => void handleTransferToDebit()}
         onSuccess={handleClosedSuccess}
       />
+
+      {/* Modal de Quitação de Saldo Devedor */}
+      {customerId && customerName && (
+        <SettleDebitDialog
+          open={isSettleDebitOpen}
+          onOpenChange={setSettleDebitOpen}
+          customerId={customerId}
+          customerName={customerName}
+          onSuccess={() => {
+            void getCustomerDebitSummaryAction(customerId).then((summary) => {
+              setPendingDebitCents(summary.totalPendingCents);
+            });
+            router.refresh();
+          }}
+        />
+      )}
 
       {/* Dialog de Vincular Cliente */}
       <Dialog open={isLinkDialogOpen} onOpenChange={setLinkDialogOpen}>

@@ -43,6 +43,13 @@
       "when": 1784748000000,
       "tag": "0005_add_cash_session_id_to_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1784749000000,
+      "tag": "0006_add_customer_debits",
+      "breakpoints": true
     }
   ]
 }

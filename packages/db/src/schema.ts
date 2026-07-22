@@ -364,6 +364,47 @@ export const cashClosingCounts = pgTable(
   })
 );
 
+export const customerDebits = pgTable(
+  "customer_debits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    comandaId: uuid("comanda_id").references(() => comandas.id, { onDelete: "set null" }),
+    amountCents: integer("amount_cents").notNull(),
+    paidCents: integer("paid_cents").default(0).notNull(),
+    status: varchar("status", { length: 30 }).default("pending").notNull(),
+    operatorUserId: uuid("operator_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantCustomerIdx: index("customer_debits_tenant_customer_idx").on(t.tenantId, t.customerId),
+  })
+);
+
+export const customerDebitPayments = pgTable(
+  "customer_debit_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    customerDebitId: uuid("customer_debit_id")
+      .notNull()
+      .references(() => customerDebits.id, { onDelete: "cascade" }),
+    cashSessionId: uuid("cash_session_id").references(() => cashSessions.id, { onDelete: "set null" }),
+    paymentMethod: varchar("payment_method", { length: 50 }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    operatorUserId: uuid("operator_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantDebitIdx: index("customer_debit_payments_tenant_debit_idx").on(t.tenantId, t.customerDebitId),
+    tenantSessionIdx: index("customer_debit_payments_tenant_session_idx").on(t.tenantId, t.cashSessionId),
+  })
+);
+
 // --- Quadras, Serviços e Aulas (CAD-03, CAD-05) -----------------------------
 
 export const courts = pgTable(
@@ -581,6 +622,10 @@ export type CashMovement = typeof cashMovements.$inferSelect;
 export type NewCashMovement = typeof cashMovements.$inferInsert;
 export type CashClosingCount = typeof cashClosingCounts.$inferSelect;
 export type NewCashClosingCount = typeof cashClosingCounts.$inferInsert;
+export type CustomerDebit = typeof customerDebits.$inferSelect;
+export type NewCustomerDebit = typeof customerDebits.$inferInsert;
+export type CustomerDebitPayment = typeof customerDebitPayments.$inferSelect;
+export type NewCustomerDebitPayment = typeof customerDebitPayments.$inferInsert;
 export type Court = typeof courts.$inferSelect;
 export type NewCourt = typeof courts.$inferInsert;
 export type CourtService = typeof courtServices.$inferSelect;

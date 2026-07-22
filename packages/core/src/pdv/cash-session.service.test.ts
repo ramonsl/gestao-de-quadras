@@ -176,7 +176,8 @@ describe("cash-session.service", () => {
         [
           { payment_method: "dinheiro", total_amount: "4000", total_change: "1000" }, // líquido R$ 30,00 em dinheiro
           { payment_method: "pix", total_amount: "8000", total_change: "0" }, // R$ 80,00 em pix
-        ], // SELECT payments
+        ], // SELECT comanda_payments
+        [], // SELECT customer_debit_payments
       ]);
 
       const summary = await getCashSessionSummary(ctx, SESSION_ID);
@@ -195,7 +196,8 @@ describe("cash-session.service", () => {
       const ctx = mkQueueCtx([
         [makeSessionRow({ initial_cash_cents: 10000 })], // SELECT session
         [], // SELECT movements
-        [{ payment_method: "dinheiro", total_amount: "5000", total_change: "0" }], // expected dinheiro = 15000
+        [{ payment_method: "dinheiro", total_amount: "5000", total_change: "0" }], // comanda_payments
+        [], // customer_debit_payments
         [{ id: "count-1", tenant_id: TENANT_ID, cash_session_id: SESSION_ID, payment_method: "dinheiro", expected_cents: 15000, counted_cents: 15500, difference_cents: 500 }], // INSERT count dinheiro
         [{ id: "count-2", tenant_id: TENANT_ID, cash_session_id: SESSION_ID, payment_method: "pix", expected_cents: 0, counted_cents: 0, difference_cents: 0 }], // INSERT count pix
         [makeSessionRow({ status: "closed", closed_by_user_id: ACTOR_ID })], // UPDATE session status = 'closed'

@@ -562,6 +562,52 @@ export const whatsappAuthKeys = pgTable(
   })
 );
 
+// --- Publicidade — Espaços e Anunciantes (PUB-01) ---------------------------
+
+/** Espaço publicitário físico/digital da arena (placa, lona, banner). */
+export const adSpaces = pgTable(
+  "ad_spaces",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    /** Identificação, ex.: "Placa 1 - Fundo da Quadra 1". */
+    name: varchar("name", { length: 120 }).notNull(),
+    /** placa_fisica | lona | banner_digital */
+    spaceType: varchar("space_type", { length: 20 }).notNull(),
+    /** disponivel | ocupado | manutencao */
+    status: varchar("status", { length: 20 }).default("disponivel").notNull(),
+    /** Valor de referência de locação (centavos). */
+    referencePriceCents: integer("reference_price_cents").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    statusIdx: index("ad_spaces_status_idx").on(t.tenantId, t.status),
+    typeIdx: index("ad_spaces_type_idx").on(t.tenantId, t.spaceType),
+  })
+);
+
+/** Anunciante (empresa parceira) da arena. */
+export const advertisers = pgTable(
+  "advertisers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    /** Razão social / nome. */
+    name: varchar("name", { length: 150 }).notNull(),
+    /** CNPJ (14) ou CPF (11) — apenas dígitos. */
+    document: varchar("document", { length: 14 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    phone: varchar("phone", { length: 20 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    documentUnique: uniqueIndex("advertisers_tenant_document_unique").on(t.tenantId, t.document),
+    nameIdx: index("advertisers_name_idx").on(t.tenantId, t.name),
+  })
+);
+
 // ---------------------------------------------------------------------------
 // Tabelas com escopo de arena (protegidas por RLS). Fonte única para o runner
 // de migrations habilitar RLS e para testes de isolamento.
@@ -583,6 +629,8 @@ export const TENANT_SCOPED_TABLES = [
   "courts",
   "court_services",
   "court_time_slots",
+  "ad_spaces",
+  "advertisers",
   "class_packages",
   "student_class_balance",
   "whatsapp_connections",
@@ -642,3 +690,7 @@ export type WhatsappAuthCreds = typeof whatsappAuthCreds.$inferSelect;
 export type NewWhatsappAuthCreds = typeof whatsappAuthCreds.$inferInsert;
 export type WhatsappAuthKey = typeof whatsappAuthKeys.$inferSelect;
 export type NewWhatsappAuthKey = typeof whatsappAuthKeys.$inferInsert;
+export type AdSpace = typeof adSpaces.$inferSelect;
+export type NewAdSpace = typeof adSpaces.$inferInsert;
+export type Advertiser = typeof advertisers.$inferSelect;
+export type NewAdvertiser = typeof advertisers.$inferInsert;

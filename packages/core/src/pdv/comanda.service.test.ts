@@ -30,9 +30,8 @@ vi.mock("../product/product.service", () => ({
   debitStock: (...args: unknown[]) => debitStockMock(...args),
 }));
 
-const { openComanda, addItemToComanda, getComandaWithItems, linkCustomerToComanda } = await import(
-  "./comanda.service"
-);
+const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda } =
+  await import("./comanda.service");
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 const ACTOR_ID = "22222222-2222-4222-8222-222222222222";
@@ -380,6 +379,69 @@ describe("getComandaWithItems", () => {
     expect(result).toBeNull();
     // A fila só tem 1 resposta: se a função buscasse itens mesmo sem achar a
     // comanda, o mock lançaria "fila esgotada" e este teste falharia.
+  });
+});
+
+describe("listOpenComandas (PDV-04)", () => {
+  it("mapeia nome/whatsapp, total e contagem de itens das comandas abertas", async () => {
+    const ctx = mkQueueCtx([
+      [
+        {
+          id: COMANDA_ID,
+          customer_id: CUSTOMER_ID,
+          customer_name: "Maria Silva",
+          customer_whatsapp: "+5511999999999",
+          created_at: new Date("2026-07-22T10:00:00Z"),
+          total_cents: "1500", // Postgres devolve SUM como string
+          item_count: "3",
+        },
+      ],
+    ]);
+
+    const result = await listOpenComandas(ctx);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].customerName).toBe("Maria Silva");
+    expect(result[0].customerWhatsapp).toBe("+5511999999999");
+    expect(result[0].totalCents).toBe(1500); // convertido para número
+    expect(result[0].itemCount).toBe(3);
+    expect(result[0].openedAt).toEqual(new Date("2026-07-22T10:00:00Z"));
+  });
+
+  it("customerName null vira 'Venda Balcão' na camada de UI — o serviço só devolve null", async () => {
+    const ctx = mkQueueCtx([
+      [
+        {
+          id: COMANDA_ID,
+          customer_id: null,
+          customer_name: null,
+          customer_whatsapp: null,
+          created_at: new Date(),
+          total_cents: 0,
+          item_count: 0,
+        },
+      ],
+    ]);
+
+    const result = await listOpenComandas(ctx);
+
+    expect(result[0].customerName).toBeNull();
+    expect(result[0].totalCents).toBe(0);
+    expect(result[0].itemCount).toBe(0);
+  });
+
+  it("retorna lista vazia quando não há comandas abertas", async () => {
+    const ctx = mkQueueCtx([[]]);
+
+    const result = await listOpenComandas(ctx);
+
+    expect(result).toEqual([]);
+  });
+
+  it("rejeita tenantId inválido antes de consultar o banco", async () => {
+    const ctx = mkQueueCtx([], { tenantId: "not-a-uuid" });
+
+    await expect(listOpenComandas(ctx)).rejects.toThrow();
   });
 });
 

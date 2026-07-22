@@ -39,6 +39,19 @@ export interface ComandaWithItems extends Comanda {
   customerWhatsapp: string | null;
 }
 
+/** Item do painel de comandas abertas (PDV-04). */
+export interface OpenComandaListItem {
+  id: string;
+  customerId: string | null;
+  /** null = venda balcão (exibir "Venda Balcão" na UI). */
+  customerName: string | null;
+  customerWhatsapp: string | null;
+  /** Momento de abertura — a UI calcula o tempo transcorrido. */
+  openedAt: Date;
+  totalCents: number;
+  itemCount: number;
+}
+
 type ComandaRow = {
   id: string;
   tenant_id: string;
@@ -241,6 +254,51 @@ export async function getComandaWithItems(
     customerName: comandaRow.customer_name,
     customerWhatsapp: comandaRow.customer_whatsapp,
   };
+}
+
+// --- Painel de comandas abertas (PDV-04) ------------------------------------
+
+type OpenComandaListRow = {
+  id: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  customer_whatsapp: string | null;
+  created_at: Date;
+  total_cents: string | number | null;
+  item_count: string | number | null;
+};
+
+/**
+ * Lista as comandas em aberto da arena (PDV-04), da mais antiga para a mais
+ * recente, com o total parcial e o nome do cliente (ou null para balcão).
+ * Só leitura — não exige `actorUserId`. Isolamento por tenant em todos os
+ * pontos: WHERE, JOIN duplo-filtrado e subconsultas de agregação.
+ */
+export async function listOpenComandas(ctx: TenantContext): Promise<OpenComandaListItem[]> {
+  assertTenantId(ctx.tenantId);
+  const result = await ctx.db.execute<OpenComandaListRow>(
+    sql`SELECT c.id, c.customer_id, c.created_at,
+               cu.name AS customer_name, cu.whatsapp AS customer_whatsapp,
+               COALESCE((SELECT SUM(ci.quantity * ci.unit_price_cents_at_sale)
+                         FROM comanda_items ci
+                         WHERE ci.tenant_id = c.tenant_id AND ci.comanda_id = c.id), 0) AS total_cents,
+               COALESCE((SELECT COUNT(*)
+                         FROM comanda_items ci2
+                         WHERE ci2.tenant_id = c.tenant_id AND ci2.comanda_id = c.id), 0) AS item_count
+        FROM comandas c
+        LEFT JOIN customers cu ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id
+        WHERE c.tenant_id = ${ctx.tenantId} AND c.status = 'open'
+        ORDER BY c.created_at ASC`
+  );
+  return rows<OpenComandaListRow>(result).map((row) => ({
+    id: row.id,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerWhatsapp: row.customer_whatsapp,
+    openedAt: row.created_at,
+    totalCents: Number(row.total_cents ?? 0),
+    itemCount: Number(row.item_count ?? 0),
+  }));
 }
 
 // --- Converter balcão → identificada (PDV-03) -------------------------------

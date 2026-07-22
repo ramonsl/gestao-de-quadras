@@ -1,0 +1,15 @@
+export {
+  OpenComandaInputSchema,
+  openComanda,
+  AddComandaItemInputSchema,
+  addItemToComanda,
+  getComandaWithItems,
+  LinkCustomerToComandaInputSchema,
+  linkCustomerToComanda,
+  type Comanda,
+  type ComandaItemView,
+  type ComandaWithItems,
+  type OpenComandaResult,
+  type AddComandaItemResult,
+  type LinkCustomerToComandaResult,
+} from "./comanda.service";

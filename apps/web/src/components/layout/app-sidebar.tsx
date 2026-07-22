@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Users,
   Package,
+  ShoppingCart,
   Calendar,
   Wrench,
   Clock,
@@ -65,7 +66,10 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
       ? [{ href: "/customers", label: "Clientes", icon: Users }]
       : []),
     ...(canAccess("pdv")
-      ? [{ href: "/admin/produtos", label: "Produtos", icon: Package }]
+      ? [
+          { href: "/pdv", label: "PDV / Comandas", icon: ShoppingCart },
+          { href: "/admin/produtos", label: "Produtos", icon: Package },
+        ]
       : []),
     ...(canAccess("quadras")
       ? [

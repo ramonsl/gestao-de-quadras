@@ -30,7 +30,7 @@ vi.mock("@gestao-de-quadras/core/users/user.service", () => ({
 
 vi.mock("@gestao-de-quadras/db", () => ({ db: { __fake: true } }));
 
-const { requireAdmin, requireSession } = await import("./session");
+const { requireAdmin, requireSession, requireModule } = await import("./session");
 
 const TENANT_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -48,8 +48,8 @@ function sessionFor(role: string) {
   };
 }
 
-function activeUser(role: string) {
-  return { id: "11111111-1111-4111-8111-111111111111", role, status: "active", modulesAllowed: ["pdv"] };
+function activeUser(role: string, modulesAllowed: string[] = ["pdv"]) {
+  return { id: "11111111-1111-4111-8111-111111111111", role, status: "active", modulesAllowed };
 }
 
 async function expectRedirect(fn: () => Promise<unknown>, to: string) {
@@ -114,5 +114,62 @@ describe("requireSession — revogação de acesso", () => {
     authMock.mockResolvedValue(null);
 
     await expectRedirect(requireSession, "/login");
+  });
+});
+
+/**
+ * PDV-02/PDV-03: `requireModule` é o único ponto de controle de acesso das
+ * telas operacionais (ex.: PDV) — regra 3 do CLAUDE.md (role E modulesAllowed).
+ * Assim como `requireAdmin`, usa o perfil/módulos vigentes NO BANCO (via
+ * `requireSession`), não os do token.
+ */
+describe("requireModule — SAAS-12 AC5 + PDV-02/03: acesso operacional por módulo", () => {
+  it("permite o atendente quando o módulo está em modulesAllowed", async () => {
+    authMock.mockResolvedValue(sessionFor("atendente"));
+    getArenaUserMock.mockResolvedValue(activeUser("atendente", ["pdv"]));
+
+    const { session, ctx } = await requireModule("pdv");
+
+    expect(session.modulesAllowed).toContain("pdv");
+    expect(ctx.tenantId).toBe(TENANT_ID);
+  });
+
+  it("permite o gerente quando o módulo está em modulesAllowed", async () => {
+    authMock.mockResolvedValue(sessionFor("gerente"));
+    getArenaUserMock.mockResolvedValue(activeUser("gerente", ["pdv", "crm"]));
+
+    const { session } = await requireModule("pdv");
+
+    expect(session.role).toBe("gerente");
+  });
+
+  it("permite o Admin mesmo sem o módulo na lista (irrestrito — SAAS-12 AC5)", async () => {
+    authMock.mockResolvedValue(sessionFor("admin"));
+    getArenaUserMock.mockResolvedValue(activeUser("admin", [])); // Admin sem nenhum módulo configurado
+
+    const { session } = await requireModule("pdv");
+
+    expect(session.role).toBe("admin");
+  });
+
+  it("redireciona para /negado quando o atendente não tem o módulo habilitado", async () => {
+    authMock.mockResolvedValue(sessionFor("atendente"));
+    getArenaUserMock.mockResolvedValue(activeUser("atendente", ["crm"])); // pdv não incluído
+
+    await expectRedirect(() => requireModule("pdv"), "/negado");
+  });
+
+  it("redireciona para /negado quando o gerente não tem o módulo habilitado", async () => {
+    authMock.mockResolvedValue(sessionFor("gerente"));
+    getArenaUserMock.mockResolvedValue(activeUser("gerente", []));
+
+    await expectRedirect(() => requireModule("pdv"), "/negado");
+  });
+
+  it("usa o modulesAllowed vigente no banco, não o do token (revogado é bloqueado mesmo com token antigo)", async () => {
+    authMock.mockResolvedValue(sessionFor("atendente")); // token antigo ainda lista "pdv"
+    getArenaUserMock.mockResolvedValue(activeUser("atendente", [])); // já revogado no banco
+
+    await expectRedirect(() => requireModule("pdv"), "/negado");
   });
 });

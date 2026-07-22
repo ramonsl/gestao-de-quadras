@@ -29,6 +29,8 @@
       "@gestao-de-quadras/core/users/modules": ["../../packages/core/src/users/modules.ts"],
       "@gestao-de-quadras/core/customers/customer.service": ["../../packages/core/src/customers/customer.service.ts"],
       "@gestao-de-quadras/core/product": ["../../packages/core/src/product/index.ts"],
+      "@gestao-de-quadras/core/pdv": ["../../packages/core/src/pdv/index.ts"],
+      "@gestao-de-quadras/core/pdv/comanda.service": ["../../packages/core/src/pdv/comanda.service.ts"],
       "@gestao-de-quadras/core/courts/court.service": ["../../packages/core/src/courts/court.service.ts"],
       "@gestao-de-quadras/core/courts/court-service.service": ["../../packages/core/src/courts/court-service.service.ts"],
       "@gestao-de-quadras/core/courts/court-time-slot.service": ["../../packages/core/src/courts/court-time-slot.service.ts"],

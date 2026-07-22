@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface WhatsappInputProps {
   id?: string;
@@ -9,6 +9,8 @@ interface WhatsappInputProps {
   defaultValue?: string;
   placeholder?: string;
   className?: string;
+  /** Notifica o valor E.164 atual (inclusive incompleto) a cada mudança. */
+  onValueChange?: (e164: string) => void;
 }
 
 export function WhatsappInput({
@@ -18,6 +20,7 @@ export function WhatsappInput({
   defaultValue = "",
   placeholder = "(51) 99999-8888",
   className,
+  onValueChange,
 }: WhatsappInputProps) {
   // Extrai apenas digitos do valor inicial (ex: +5551999998888 -> 51999998888)
   const initialDigits = defaultValue.replace(/\D/g, "").replace(/^55/, "");
@@ -41,6 +44,13 @@ export function WhatsappInput({
   const digitsOnly = formatted.replace(/\D/g, "");
   const e164Value = digitsOnly ? `+55${digitsOnly}` : "";
 
+  useEffect(() => {
+    onValueChange?.(e164Value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- excluir onValueChange de propósito:
+    // consumidores inline (`onValueChange={setX}`) são estáveis, mas uma closure nova a cada
+    // render do pai não deve reexecutar este efeito — só a mudança do próprio valor importa.
+  }, [e164Value]);
+
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1.5">
@@ -50,10 +60,10 @@ export function WhatsappInput({
           <span>+55</span>
         </div>
 
-        {/* Input Mascarado para o usuário */}
+        {/* Input Mascarado para o usuário — recebe o `id` público (o rótulo aponta pra este). */}
         <input
           type="tel"
-          id={`${id}_display`}
+          id={id}
           value={formatted}
           onChange={handleChange}
           placeholder={placeholder}
@@ -66,7 +76,7 @@ export function WhatsappInput({
       </div>
 
       {/* Input Oculto enviado ao Server Action no formato E.164 */}
-      <input type="hidden" id={id} name={name} value={e164Value} />
+      <input type="hidden" id={`${id}_e164`} name={name} value={e164Value} />
     </div>
   );
 }

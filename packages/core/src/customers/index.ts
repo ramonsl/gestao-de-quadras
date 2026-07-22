@@ -8,7 +8,12 @@ export {
   searchCustomersForPdv,
   getCustomersByTenant,
   updateCustomer,
+  SetCustomerOptInInputSchema,
+  setCustomerOptIn,
+  QuickCreateCustomerInputSchema,
+  quickCreateCustomerForPdv,
   type CreateGlobalCustomerInput,
   type GlobalCustomer,
   type LocalCustomer,
+  type QuickCreateCustomerResult,
 } from "./customer.service";

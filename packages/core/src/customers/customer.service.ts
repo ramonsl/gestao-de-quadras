@@ -213,3 +213,128 @@ export async function updateCustomer(
         WHERE id = ${customerId} AND tenant_id = ${ctx.tenantId}`
   );
 }
+
+async function writeAudit(
+  ctx: TenantContext,
+  action: string,
+  details: Record<string, unknown>
+): Promise<void> {
+  if (!ctx.actorUserId) return;
+  await ctx.db.execute(
+    sql`INSERT INTO audit_logs (tenant_id, user_id, action, details)
+        VALUES (${ctx.tenantId}, ${ctx.actorUserId}, ${action}, ${JSON.stringify(details)})`
+  );
+}
+
+// --- Opt-in LGPD (CAD-01) ----------------------------------------------------
+
+export const SetCustomerOptInInputSchema = z.object({
+  customerId: z.string().uuid(),
+  optIn: z.boolean(),
+});
+
+/**
+ * Grava/atualiza o consentimento de comunicação via WhatsApp (CAD-01, LGPD).
+ * `ON CONFLICT` por `customer_id` (unique) — idempotente: chamar de novo com o
+ * mesmo valor apenas atualiza `changed_at`.
+ */
+export async function setCustomerOptIn(
+  ctx: TenantContext,
+  input: z.infer<typeof SetCustomerOptInInputSchema>
+): Promise<void> {
+  assertTenantId(ctx.tenantId);
+  const data = SetCustomerOptInInputSchema.parse(input);
+
+  // Guarda IDOR (regra 1b): revalida que o customerId pertence a ESTE tenant
+  // antes de gravar — customer_opt_in_lgpd.customer_id é único globalmente
+  // (sem FK), então um id de outro tenant alteraria o opt-in de um cliente alheio.
+  const customer = await getCustomerById(ctx, data.customerId);
+  if (!customer) {
+    throw new Error(`Cliente ${data.customerId} não encontrado neste tenant.`);
+  }
+
+  await ctx.db.execute(
+    sql`INSERT INTO customer_opt_in_lgpd (tenant_id, customer_id, opt_in, opt_in_at, opt_out_at, changed_by_user_id)
+        VALUES (${ctx.tenantId}, ${data.customerId}, ${data.optIn},
+                ${data.optIn ? sql`now()` : null}, ${!data.optIn ? sql`now()` : null},
+                ${ctx.actorUserId ?? null})
+        ON CONFLICT (customer_id) DO UPDATE SET
+          opt_in = EXCLUDED.opt_in,
+          opt_in_at = CASE WHEN EXCLUDED.opt_in THEN now() ELSE customer_opt_in_lgpd.opt_in_at END,
+          opt_out_at = CASE WHEN NOT EXCLUDED.opt_in THEN now() ELSE customer_opt_in_lgpd.opt_out_at END,
+          changed_by_user_id = EXCLUDED.changed_by_user_id,
+          changed_at = now()`
+  );
+  await writeAudit(ctx, "customer:opt_in_changed", { customerId: data.customerId, optIn: data.optIn });
+}
+
+// --- Cadastro rápido inline no PDV (PDV-02) ---------------------------------
+
+export const QuickCreateCustomerInputSchema = z.object({
+  whatsapp: WhatsappSchema,
+  name: z.string().min(1, "Nome obrigatório").max(100),
+  optInLgpd: z.boolean().default(false),
+});
+
+export type QuickCreateCustomerResult =
+  | {
+      success: true;
+      customer: LocalCustomer;
+      /** Já existia um cliente local no tenant com esse WhatsApp — nada foi criado. */
+      reusedExistingLocal: boolean;
+      /** O registro em `global_customers` já existia (de outra arena) e foi reaproveitado. */
+      globalCustomerFound: boolean;
+    }
+  | { success: false; reason: "validation"; errors: Record<string, string[] | undefined> };
+
+/**
+ * Cadastro rápido de cliente direto na tela do PDV (PDV-02), sem sair para a
+ * tela completa (CAD-01). Só Nome + WhatsApp são exigidos aqui — orquestra as
+ * mesmas funções de identidade global do cadastro completo, não duplica lógica.
+ */
+export async function quickCreateCustomerForPdv(
+  ctx: TenantContext,
+  input: z.infer<typeof QuickCreateCustomerInputSchema>
+): Promise<QuickCreateCustomerResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("quickCreateCustomerForPdv exige ctx.actorUserId (operador do lançamento).");
+  }
+
+  const parsed = QuickCreateCustomerInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, reason: "validation", errors: parsed.error.flatten().fieldErrors };
+  }
+  const data = parsed.data;
+
+  // Cliente já local no tenant com esse WhatsApp: reaproveita, não duplica.
+  const existingLocal = await searchCustomersForPdv(ctx, data.whatsapp);
+  const alreadyLocal = existingLocal.find((c) => c.whatsapp === data.whatsapp);
+  if (alreadyLocal) {
+    await setCustomerOptIn(ctx, { customerId: alreadyLocal.id, optIn: data.optInLgpd });
+    return { success: true, customer: alreadyLocal, reusedExistingLocal: true, globalCustomerFound: false };
+  }
+
+  const globalResult = await findOrCreateGlobalCustomer(ctx.db, data.whatsapp);
+  const globalCustomer = globalResult.found
+    ? globalResult.customer
+    : await createGlobalCustomer(ctx.db, { whatsapp: data.whatsapp, name: data.name });
+
+  // Dados do global prevalecem quando já existia (evita divergir do que outra arena já viu).
+  const local = await createCustomerInTenant(ctx, {
+    globalCustomerId: globalCustomer.id,
+    whatsapp: data.whatsapp,
+    name: globalResult.found ? globalCustomer.name : data.name,
+    email: globalResult.found && globalCustomer.email ? globalCustomer.email : undefined,
+    birthDate: globalResult.found && globalCustomer.birthDate ? new Date(globalCustomer.birthDate) : undefined,
+    createdByUserId: ctx.actorUserId,
+  });
+
+  await setCustomerOptIn(ctx, { customerId: local.id, optIn: data.optInLgpd });
+  await writeAudit(ctx, "customer:quick_created_via_pdv", {
+    customerId: local.id,
+    globalCustomerFound: globalResult.found,
+  });
+
+  return { success: true, customer: local, reusedExistingLocal: false, globalCustomerFound: globalResult.found };
+}

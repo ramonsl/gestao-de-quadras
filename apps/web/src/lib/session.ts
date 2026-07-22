@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getArenaUser, type ArenaUserContext } from "@gestao-de-quadras/core/users/user.service";
+import type { ModuleSlug } from "@gestao-de-quadras/core/users/modules";
 import { db } from "@gestao-de-quadras/db";
 
 export interface ArenaSession {
@@ -80,5 +81,21 @@ export async function requireSession(): Promise<ArenaSession> {
 export async function requireAdmin(): Promise<{ session: ArenaSession; ctx: ArenaUserContext }> {
   const session = await requireSession();
   if (session.role !== "admin") redirect("/usuarios/negado");
+  return { session, ctx: contextFor(session) };
+}
+
+/**
+ * Exige sessão + módulo habilitado (`role` E `modulesAllowed`, regra 3). Admin
+ * tem acesso irrestrito independente da matriz (SAAS-12 AC5). Usado por telas
+ * operacionais (ex.: PDV) onde os 3 papéis podem operar, desde que o módulo
+ * esteja liberado para o operador.
+ */
+export async function requireModule(
+  moduleSlug: ModuleSlug
+): Promise<{ session: ArenaSession; ctx: ArenaUserContext }> {
+  const session = await requireSession();
+  if (session.role !== "admin" && !session.modulesAllowed.includes(moduleSlug)) {
+    redirect("/negado");
+  }
   return { session, ctx: contextFor(session) };
 }

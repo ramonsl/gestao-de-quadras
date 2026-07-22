@@ -48,7 +48,7 @@ Como operador de caixa, quero lançar produtos e serviços na comanda de um clie
 > 3.  Acionar o cadastro rápido e preencher **Nome** e um **WhatsApp inédito** no sistema (não cadastrado em nenhuma arena). Confirmar.
 >     *   **Esperado:** Cliente criado com sucesso; o registro global (`global_customers`) e o registro local do tenant são criados; o cliente fica imediatamente vinculado à comanda ativa.
 > 4.  Acionar o cadastro rápido novamente informando um **WhatsApp já existente em `global_customers`** (de outra arena).
->     *   **Esperado:** O sistema exibe os dados globais já encontrados (nome, e-mail, data de nascimento, foto, se houver) para confirmação; ao confirmar, cria apenas o registro local do tenant vinculado ao cliente global, sem duplicar o registro global.
+>     *   **Esperado:** Assim que o WhatsApp é digitado por completo (antes de submeter), a tela exibe uma prévia inline com os dados globais já encontrados (nome e e-mail, se houver), avisando que esses dados prevalecerão sobre o texto digitado no campo Nome. Ao confirmar o cadastro (botão "Cadastrar"), cria apenas o registro local do tenant vinculado ao cliente global, sem duplicar o registro global e sem etapa de confirmação separada — a prévia inline já cumpre esse papel antes do envio.
 > 5.  Durante o cadastro rápido, observar a etapa de opt-in de comunicação via WhatsApp (LGPD).
 >     *   **Esperado:** O opt-in é solicitado e registrado especificamente para a arena atual, igual ao fluxo da tela completa de clientes (`CAD-01`).
 > 6.  Concluído o cadastro rápido, abrir a tela completa de Clientes (`CAD-01`) e localizar o cliente recém-criado.

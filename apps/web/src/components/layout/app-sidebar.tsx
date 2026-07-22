@@ -40,10 +40,8 @@ interface NavItem {
 export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-  const [isMounted, setIsMounted] = useState<boolean>(false);
 
   useEffect(() => {
-    setIsMounted(true);
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (saved === "true") {
       setIsCollapsed(true);
@@ -123,7 +121,7 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
 
   return (
     <aside
-      className={`shrink-0 flex flex-col text-white transition-[width] duration-300 ease-in-out select-none relative ${
+      className={`group shrink-0 flex flex-col text-white transition-[width] duration-300 ease-in-out select-none relative ${
         isCollapsed ? "w-[64px]" : "w-[216px]"
       }`}
       style={{ backgroundColor: "var(--sidebar-bg)" }}

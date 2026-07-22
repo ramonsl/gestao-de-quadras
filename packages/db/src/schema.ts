@@ -216,6 +216,60 @@ export const stockMovements = pgTable(
   })
 );
 
+// --- PDV — Comandas e Itens (PDV-02, PDV-03) --------------------------------
+
+/**
+ * Comanda: identificada (customer_id preenchido), aberta por cadastro rápido
+ * de cliente (mesmo caso, customer_id preenchido), ou balcão/anônima — nesse
+ * caso `customer_id` nulo é o próprio discriminador (PDV-03), sem flag extra.
+ * Sem FK em `customer_id`: uma exclusão/anonimização LGPD (CAD-06) de cliente
+ * não pode travar nem cascatear a exclusão do histórico financeiro.
+ */
+export const comandas = pgTable(
+  "comandas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    customerId: uuid("customer_id"),
+    /** open | closed — fechamento/pagamento é PDV-07, fora desta fase. */
+    status: varchar("status", { length: 20 }).default("open").notNull(),
+    openedByUserId: uuid("opened_by_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantStatusIdx: index("comandas_tenant_status_idx").on(t.tenantId, t.status),
+    tenantCustomerIdx: index("comandas_tenant_customer_idx").on(t.tenantId, t.customerId),
+  })
+);
+
+/**
+ * Item lançado numa comanda (PDV-02 AC4): `productNameAtSale` e
+ * `unitPriceCentsAtSale` são snapshots imutáveis do momento do lançamento —
+ * nunca recalculados a partir do catálogo vigente (regra 10, CLAUDE.md).
+ * Sem FK em `product_id`: excluir um produto do catálogo nunca pode apagar
+ * nem travar por causa de um lançamento financeiro já gravado.
+ */
+export const comandaItems = pgTable(
+  "comanda_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    comandaId: uuid("comanda_id")
+      .notNull()
+      .references(() => comandas.id, { onDelete: "cascade" }),
+    productId: uuid("product_id").notNull(),
+    productNameAtSale: varchar("product_name_at_sale", { length: 255 }).notNull(),
+    quantity: integer("quantity").notNull(),
+    unitPriceCentsAtSale: integer("unit_price_cents_at_sale").notNull(),
+    operatorUserId: uuid("operator_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantComandaIdx: index("comanda_items_tenant_comanda_idx").on(t.tenantId, t.comandaId),
+  })
+);
+
 // --- Quadras, Serviços e Aulas (CAD-03, CAD-05) -----------------------------
 
 export const courts = pgTable(
@@ -385,6 +439,8 @@ export const TENANT_SCOPED_TABLES = [
   "customer_opt_in_lgpd",
   "products",
   "stock_movements",
+  "comandas",
+  "comanda_items",
   "courts",
   "court_services",
   "court_time_slots",
@@ -415,6 +471,10 @@ export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type NewStockMovement = typeof stockMovements.$inferInsert;
+export type Comanda = typeof comandas.$inferSelect;
+export type NewComanda = typeof comandas.$inferInsert;
+export type ComandaItem = typeof comandaItems.$inferSelect;
+export type NewComandaItem = typeof comandaItems.$inferInsert;
 export type Court = typeof courts.$inferSelect;
 export type NewCourt = typeof courts.$inferInsert;
 export type CourtService = typeof courtServices.$inferSelect;

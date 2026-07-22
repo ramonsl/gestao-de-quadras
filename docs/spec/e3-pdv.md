@@ -19,11 +19,51 @@ Como operador de caixa, quero abrir e fechar o caixa com conferência de valores
 **Descrição:**
 Como operador de caixa, quero lançar produtos e serviços na comanda de um cliente identificado, para consolidar o consumo dele e cobrar ao final.
 
+> **Decisão (2026-07-21):** PDV-02 passa a cobrir também o **cadastro rápido inline de cliente** (Nome + WhatsApp) diretamente na tela do PDV, para os casos em que a busca não encontra o cliente. O cadastro rápido não substitui a tela completa (`CAD-01`), que continua sendo o local para complementar e-mail, data de nascimento e demais dados — esses campos não são obrigatórios para a criação rápida.
+
 **Critérios de Aceite:**
-*   Permitir buscar e selecionar um cliente cadastrado (via busca rápida por nome ou WhatsApp) para vincular à comanda ativa.
+*   Permitir buscar e selecionar um cliente cadastrado (via busca rápida por nome ou WhatsApp) para vincular à comanda ativa. Se a busca não retornar nenhum resultado, o operador pode acionar o **cadastro rápido** do cliente sem sair da tela do PDV (ver critério abaixo).
+*   **Cadastro Rápido de Cliente (Inline):** Quando a busca não encontra o cliente, o PDV permite cadastrá-lo na própria tela de lançamento, sem navegar até a tela completa de clientes (`CAD-01`).
+    *   **Campos:** o formulário rápido solicita apenas **Nome** e **WhatsApp** (ambos obrigatórios). Os demais campos do cadastro completo (e-mail, data de nascimento, foto) não são exigidos neste fluxo — ficam disponíveis para complementação posterior na tela de clientes (`CAD-01`/`CAD-06`) e sua ausência não bloqueia a criação do cliente nem o lançamento de itens na comanda.
+    *   **Identidade Global:** Ao informar o WhatsApp, o sistema consulta `global_customers` (schema `public`), com o mesmo comportamento de `CAD-01`: se já existir um cliente global com aquele número, seus dados (nome, e-mail, data de nascimento, foto) são reaproveitados e apenas o registro local do tenant é criado, vinculado ao `global_customer_id`; se o número for inédito, o sistema cria o registro global e, em seguida, o registro local do tenant.
+    *   **Opt-in LGPD:** O consentimento para comunicações via WhatsApp é solicitado e registrado por arena, com o mesmo tratamento do cadastro completo (`CAD-01`).
+    *   **Sem distinção de categoria:** O cliente criado pelo cadastro rápido é um cliente normal do CRM da arena — disponível imediatamente para busca, histórico de consumo, pontos e filiação, sem qualquer diferença em relação a um cliente cadastrado pela tela completa.
+*   **Três caminhos para iniciar a comanda:** busca de cliente existente (critério acima), cadastro rápido de cliente novo (critério acima) ou nenhuma identificação — venda balcão/anônima, cujas regras completas estão em `PDV-03`.
 *   Cada lançamento de item deve gravar internamente: ID do produto/serviço, quantidade, **valor unitário no momento do lançamento** (snapshot do preço vigente em centavos/integer), ID do operador de caixa e data/hora do lançamento. O preço gravado é imutável — alterações futuras no cadastro do produto nunca alteram registros já gravados.
 *   **Impressão de Fichas de Produção:** Ao concluir o lançamento de um ou mais itens na comanda, se o seletor de impressão estiver ativo (ou configurado em `CAD-07`), o sistema dispara a impressão das fichas de produção/retirada em bobina térmica (fichas individuais por unidade, ver `PDV-12`).
 *   Cada lançamento bem-sucedido na comanda de um cliente com opt-in ativo dispara uma notificação WhatsApp em tempo real contendo o item adicionado e o saldo acumulado (ver regras de agrupamento de mensagens em `WPP-02`).
+
+> ### Roteiro de Teste Manual (QA)
+>
+> **Pré-condições:**
+> *   Estar logado no PDV como Atendente, Gerente ou Admin, com uma comanda em processo de abertura/lançamento.
+> *   Ter ao menos um cliente já cadastrado na arena atual, com WhatsApp conhecido (para testar o caminho de busca).
+> *   Ter à mão um WhatsApp que não esteja cadastrado em nenhuma arena (para testar a criação de um registro global novo) e, se possível, um WhatsApp já cadastrado em **outra** arena de teste (para testar o reaproveitamento de `global_customers`).
+>
+> **Passo a passo:**
+> 1.  Na tela do PDV, iniciar uma nova comanda e buscar por um cliente já cadastrado (nome ou WhatsApp).
+>     *   **Esperado:** O cliente aparece na lista de resultados e pode ser vinculado normalmente à comanda (comportamento já existente, sem regressão).
+> 2.  Buscar por um nome/WhatsApp que não retorna nenhum resultado.
+>     *   **Esperado:** A tela exibe a opção de cadastro rápido (ex.: botão "Cadastrar novo cliente"), sem sair da tela do PDV.
+> 3.  Acionar o cadastro rápido e preencher **Nome** e um **WhatsApp inédito** no sistema (não cadastrado em nenhuma arena). Confirmar.
+>     *   **Esperado:** Cliente criado com sucesso; o registro global (`global_customers`) e o registro local do tenant são criados; o cliente fica imediatamente vinculado à comanda ativa.
+> 4.  Acionar o cadastro rápido novamente informando um **WhatsApp já existente em `global_customers`** (de outra arena).
+>     *   **Esperado:** O sistema exibe os dados globais já encontrados (nome, e-mail, data de nascimento, foto, se houver) para confirmação; ao confirmar, cria apenas o registro local do tenant vinculado ao cliente global, sem duplicar o registro global.
+> 5.  Durante o cadastro rápido, observar a etapa de opt-in de comunicação via WhatsApp (LGPD).
+>     *   **Esperado:** O opt-in é solicitado e registrado especificamente para a arena atual, igual ao fluxo da tela completa de clientes (`CAD-01`).
+> 6.  Concluído o cadastro rápido, abrir a tela completa de Clientes (`CAD-01`) e localizar o cliente recém-criado.
+>     *   **Esperado:** O cliente aparece normalmente na listagem/busca, com Nome e WhatsApp preenchidos e e-mail/data de nascimento em branco, editáveis como qualquer outro cliente — sem nenhuma marcação de "cadastro incompleto".
+> 7.  Editar esse cliente pela tela completa, preenchendo e-mail e data de nascimento.
+>     *   **Esperado:** Os dados são salvos normalmente e passam a valer globalmente (`CAD-06`), sem restrição adicional por ele ter sido criado originalmente via PDV.
+> 8.  Repetir o passo 1 e, dessa vez, optar por não identificar nenhum cliente (seguir como venda balcão).
+>     *   **Esperado:** A comanda é aberta como balcão/anônima conforme `PDV-03` (sem pontos, sem notificação WhatsApp), confirmando que os três caminhos — busca, cadastro rápido e anônimo — coexistem na mesma tela.
+>
+> **Casos de borda a validar manualmente:**
+> *   Tentar concluir o cadastro rápido deixando o campo **Nome** em branco — deve bloquear a criação com mensagem de campo obrigatório.
+> *   Tentar concluir o cadastro rápido deixando o campo **WhatsApp** em branco — deve bloquear a criação com mensagem de campo obrigatório.
+> *   Informar um WhatsApp em formato inválido (sem DDI/DDD, com letras, número incompleto) — deve ser rejeitado pela mesma validação estrutural de `CAD-01`.
+> *   Tentar cadastrar rapidamente um WhatsApp que já pertence a um cliente **local da própria arena atual** — o sistema deve reconhecer o cliente existente em vez de criar um duplicado no tenant.
+> *   Cancelar o cadastro rápido no meio do preenchimento — a comanda deve permanecer aberta, permitindo tentar a busca novamente ou seguir como balcão, sem travar a tela.
 
 ---
 

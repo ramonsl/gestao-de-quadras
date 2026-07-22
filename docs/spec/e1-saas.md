@@ -177,3 +177,57 @@ Como Admin da Arena, quero cadastrar e gerenciar os operadores da minha arena (m
 12. **Auditoria:** criação, edição, alteração de módulos, reset de senha e inativação/reativação geram registro em `audit_logs` do tenant (ator = Admin executor).
 13. **Listagem:** nome, usuário/login, perfil, módulos, status e último acesso; com busca.
 
+---
+
+## SAAS-13 [P2] — Navegação Lateral (Sidebar) Recolhível com Persistência de Preferência
+**Descrição:**
+Como usuário autenticado do painel da arena (Admin, Gerente ou Atendente), quero poder recolher e expandir a barra de navegação lateral do shell autenticado, para ganhar espaço horizontal de tela quando preferir uma navegação mais compacta, mantendo minha última escolha lembrada nos próximos acessos pelo mesmo navegador.
+
+**Critérios de Aceite:**
+1. **Escopo:** O recolhimento se aplica ao shell autenticado único (`AppSidebar`, usado por `apps/web/src/app/(app)/layout.tsx`), disponível igualmente para os três perfis (Admin, Gerente, Atendente) — não é restringido por papel nem por módulo habilitado (`modulesAllowed`).
+2. **Estados de largura:** A sidebar tem dois estados visuais: **expandido** (216px de largura, ícone + rótulo de texto em cada item de navegação) e **recolhido** (64px de largura, somente ícones). O estado padrão inicial (antes de qualquer preferência salva no navegador) é expandido.
+3. **Botão de alternância no cabeçalho:** Um botão no cabeçalho da sidebar alterna entre os dois estados, trocando o ícone entre `PanelLeftClose` (expandido) e `PanelLeftOpen` (recolhido). No estado expandido, esse botão fica sempre visível. No estado recolhido, esse mesmo botão do cabeçalho fica oculto por padrão e só aparece ao passar o mouse sobre a sidebar (hover).
+4. **Botão redundante de expandir no rodapé:** Enquanto a sidebar estiver recolhida, um segundo botão de expandir é exibido fixo no rodapé da área de navegação, sempre visível (não depende de hover), garantindo uma forma direta de reverter o recolhimento mesmo sem passar o mouse pelo cabeçalho.
+5. **Tooltips no estado recolhido:** Quando recolhida, cada ícone de item de navegação exibe o nome do módulo/rótulo como tooltip nativo (atributo `title`) ao passar o mouse. O botão de alternância também exibe um `title` ("Expandir menu" / "Recolher menu") em ambos os estados.
+6. **Adaptação de elementos auxiliares ao estado recolhido:** os elementos que normalmente exibem texto passam a exibir apenas um ícone/indicador compacto, preservando a informação via `title` quando aplicável: o distintivo da arena no cabeçalho mostra somente a inicial (com `title` do nome/slug da arena), o rodapé do usuário mostra somente a inicial do nome em um avatar circular (com `title` de "nome (papel)"), e o indicador de status do WhatsApp (`WPP-01`, componente `WhatsAppStatusBadge`) mostra apenas o ponto colorido de status, sem o rótulo textual.
+7. **Transição suave:** A alternância entre os estados anima a largura da sidebar via CSS (`transition-[width] duration-300 ease-in-out`), evitando um salto abrupto de layout.
+8. **Persistência local:** A preferência de estado (recolhido/expandido) é salva no `localStorage` do navegador sob a chave `arena_sidebar_collapsed` (valores `"true"`/`"false"`) a cada alternância. A leitura ocorre no client, após a montagem do componente (`useEffect`), portanto o valor salvo é restaurado logo após o primeiro carregamento da tela — podendo haver um breve instante inicial com o estado padrão (expandido) antes da preferência salva ser aplicada.
+9. **Escopo da persistência:** A preferência é por navegador (chave de `localStorage`), não por usuário nem por tenant — persiste entre logout/login e entre recarregamentos de página no mesmo navegador, mas não é sincronizada entre dispositivos ou perfis diferentes.
+10. **Independência da matriz de permissões:** O recolhimento/expansão é puramente uma preferência de exibição. A lista de itens de navegação exibida continua determinada exclusivamente pela matriz de módulos permitidos da sessão (`SAAS-02`, `SAAS-10`) — recolher a sidebar não oculta nem exibe módulos adicionais.
+
+> ### Roteiro de Teste Manual (QA)
+>
+> **Pré-condições:**
+> *   Estar logado no painel da arena (`/login` do subdomínio do tenant) com um usuário de qualquer perfil: Admin, Gerente ou Atendente.
+> *   O usuário de teste deve ter ao menos um módulo habilitado, para existirem itens de navegação visíveis na sidebar.
+> *   Utilizar um navegador com `localStorage` habilitado (evitar aba anônima/privada com bloqueio de armazenamento, que invalida os passos 7 e 8).
+>
+> **Passo a passo:**
+> 1.  Fazer login e observar a sidebar no carregamento inicial (sem preferência salva anteriormente no navegador).
+>     *   **Esperado:** Sidebar expandida (216px), com nome/inicial da arena, itens de navegação com ícone + texto, status do WhatsApp com texto, e rodapé com nome e papel do usuário por extenso.
+> 2.  Clicar no botão de alternância (ícone `PanelLeftClose`) no cabeçalho.
+>     *   **Esperado:** A sidebar anima suavemente até 64px de largura; os textos do cabeçalho, dos itens de navegação e do rodapé desaparecem, restando somente ícones; o ícone do botão muda para `PanelLeftOpen`.
+> 3.  Com a sidebar recolhida, passar o mouse sobre um ícone de item de navegação.
+>     *   **Esperado:** Aparece o tooltip nativo do navegador com o rótulo do módulo (ex.: "Clientes").
+> 4.  Com a sidebar recolhida, observar o rodapé da navegação sem mover o mouse até ele.
+>     *   **Esperado:** Um botão de expandir (`PanelLeftOpen`) permanece visível e fixo no rodapé, independentemente de hover.
+> 5.  Com a sidebar recolhida, passar o mouse sobre a área do cabeçalho (sem clicar).
+>     *   **Esperado:** O botão de alternância do cabeçalho, antes oculto, aparece ao passar o mouse sobre a sidebar.
+> 6.  Clicar em qualquer um dos dois botões de expandir (cabeçalho em hover, ou rodapé fixo).
+>     *   **Esperado:** A sidebar volta suavemente ao estado expandido (216px), com todos os rótulos de texto de volta.
+> 7.  Recolher a sidebar novamente e recarregar a página inteira (F5).
+>     *   **Esperado:** A sidebar carrega já recolhida (64px), refletindo a última preferência salva (observar se há um flash breve do estado expandido antes de a preferência ser aplicada).
+> 8.  Fazer logout e login novamente no mesmo navegador.
+>     *   **Esperado:** O estado recolhido/expandido permanece o mesmo da última preferência salva (a preferência é do navegador, não do usuário logado).
+> 9.  Repetir os passos 2 a 6 logado como Atendente e como Gerente.
+>     *   **Esperado:** Comportamento de recolher/expandir idêntico nos três perfis; a lista de módulos exibida continua sendo somente a permitida pela sessão, com ou sem a sidebar recolhida.
+> 10. Comparar o indicador de status do WhatsApp com a sidebar expandida e recolhida.
+>     *   **Esperado:** Expandida mostra o texto do status (ex.: "Conectado"); recolhida mostra apenas o indicador colorido, sem texto.
+>
+> **Casos de borda a validar manualmente:**
+> *   Limpar o `localStorage` (ou abrir aba anônima) e confirmar que a sidebar volta ao padrão expandido.
+> *   Editar manualmente o valor salvo em `localStorage` (`arena_sidebar_collapsed`) para algo diferente de `"true"` (ex.: vazio, `"1"`, `"yes"`) e confirmar que o sistema trata como expandido (fallback seguro), sem travar a tela.
+> *   Clicar repetidamente e em sequência rápida no botão de alternância durante a transição de 300ms, e confirmar que não há travamento visual nem perda de cliques.
+> *   Testar com um usuário sem nenhum módulo habilitado (perfil não-admin, `modulesAllowed` vazio): confirmar que a sidebar ainda alterna normalmente mesmo sem nenhum item de navegação visível.
+> *   Redimensionar a janela para uma largura pequena (tablet) e confirmar que a área de conteúdo (`flex-1 min-w-0`) permanece utilizável com a sidebar em ambos os estados.
+

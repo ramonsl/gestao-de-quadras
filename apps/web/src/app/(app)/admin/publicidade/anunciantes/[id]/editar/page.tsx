@@ -5,12 +5,13 @@ import { AdvertiserForm } from "../../_components/advertiser-form";
 import { updateAdvertiserAction, deleteAdvertiserAction } from "../../_actions/advertiser.actions";
 import { Button } from "@/components/ui/button";
 
-export default async function EditarAnunciantePage({ params }: { params: { id: string } }) {
+export default async function EditarAnunciantePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await requireSession();
   if (!["admin", "gerente"].includes(session.role)) redirect("/negado");
   const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
 
-  const advertiser = await getAdvertiserById(params.id, ctx);
+  const advertiser = await getAdvertiserById(id, ctx);
   if (!advertiser) redirect("/admin/publicidade/anunciantes");
 
   return (

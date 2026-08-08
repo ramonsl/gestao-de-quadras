@@ -5,13 +5,14 @@ import { getProductById } from "@gestao-de-quadras/core/product";
 import { ProductForm } from "@/components/products/product-form";
 import { updateProductAction } from "../../_actions/update-product.action";
 
-export default async function EditarProdutoPage({ params }: { params: { id: string } }) {
+export default async function EditarProdutoPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!["admin", "gerente"].includes(session.user.role ?? "")) redirect("/dashboard");
 
   const ctx = arenaContext(session.user);
-  const product = await getProductById(params.id, ctx);
+  const product = await getProductById(id, ctx);
   if (!product) redirect("/admin/produtos");
 
   return (

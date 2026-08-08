@@ -7,11 +7,12 @@ import Link from "next/link";
 export default async function CustomerDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const session = await requireSession();
   const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
-  const customer = await getCustomerById(ctx, params.id);
+  const customer = await getCustomerById(ctx, id);
 
   if (!customer) {
     redirect("/customers");

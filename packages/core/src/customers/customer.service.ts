@@ -161,6 +161,7 @@ export async function getCustomerById(
   customerId: string
 ): Promise<LocalCustomer | null> {
   assertTenantId(ctx.tenantId);
+  if (!customerId) return null;
   const result = await ctx.db.execute<LocalCustomerRow>(
     sql`SELECT ${LOCAL_COLS} FROM customers WHERE id = ${customerId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
   );

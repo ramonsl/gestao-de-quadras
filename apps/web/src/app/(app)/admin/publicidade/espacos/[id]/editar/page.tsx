@@ -5,12 +5,13 @@ import { AdSpaceForm } from "../../_components/ad-space-form";
 import { updateAdSpaceAction, deleteAdSpaceAction } from "../../_actions/ad-space.actions";
 import { Button } from "@/components/ui/button";
 
-export default async function EditarEspacoPage({ params }: { params: { id: string } }) {
+export default async function EditarEspacoPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await requireSession();
   if (!["admin", "gerente"].includes(session.role)) redirect("/negado");
   const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
 
-  const space = await getAdSpaceById(params.id, ctx);
+  const space = await getAdSpaceById(id, ctx);
   if (!space) redirect("/admin/publicidade/espacos");
 
   return (

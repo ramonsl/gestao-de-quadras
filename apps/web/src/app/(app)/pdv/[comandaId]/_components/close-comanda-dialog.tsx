@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCentsToBRL } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { closeComandaAction } from "../_actions/close-comanda.action";
+import { getCustomerPointsSummaryAction } from "../../_actions/points.actions";
+import type { CustomerPointsSummary } from "@gestao-de-quadras/core/points";
 import type { PaymentMethodEnum } from "@gestao-de-quadras/core/pdv";
 import type { z } from "zod";
 
@@ -50,6 +52,17 @@ export function CloseComandaDialog({
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pointsSummary, setPointsSummary] = useState<CustomerPointsSummary | null>(null);
+
+  useEffect(() => {
+    if (open && customerId) {
+      void getCustomerPointsSummaryAction(customerId, totalCents).then((res) => {
+        setPointsSummary(res);
+      });
+    } else {
+      setPointsSummary(null);
+    }
+  }, [open, customerId, totalCents]);
 
   // Helper para converter "12,50" -> 1250 centavos
   function parseCents(valueStr: string): number {
@@ -139,6 +152,14 @@ export function CloseComandaDialog({
             ? "O valor total pago é menor que o valor da comanda."
             : result.reason === "invalid_cash_received"
             ? "O valor em dinheiro recebido é menor que o valor cobrado."
+            : result.reason === "points_disabled"
+            ? "O programa de pontos está desativado nesta arena."
+            : result.reason === "points_anonymous_comanda"
+            ? "Não é possível resgatar pontos em comandas de venda balcão (sem cliente identificado)."
+            : result.reason === "points_insufficient_balance"
+            ? "O cliente não possui saldo de pontos suficiente para este valor de resgate."
+            : result.reason === "points_exceed_max_redemption"
+            ? "O valor em pontos excede o limite máximo de abatimento permitido para esta comanda."
             : "Não foi possível fechar a comanda. Verifique os valores."
         );
         setIsSubmitting(false);
@@ -279,6 +300,42 @@ export function CloseComandaDialog({
                   </div>
                 </div>
 
+                {row.method === "pontos" && (
+                  <div className="pt-1.5 border-t border-dashed border-[var(--border)] space-y-1">
+                    {!customerId ? (
+                      <p className="text-[11px] text-[var(--danger)] font-medium">
+                        ⚠️ O resgate de pontos só está disponível para comandas com cliente identificado.
+                      </p>
+                    ) : pointsSummary ? (
+                      !pointsSummary.enabled ? (
+                        <p className="text-[11px] text-[var(--danger)] font-medium">
+                          ⚠️ O programa de pontos está desativado nas configurações desta arena.
+                        </p>
+                      ) : (
+                        <div className="p-2 bg-emerald-50/70 border border-emerald-200 rounded text-[11px] text-emerald-950 space-y-0.5">
+                          <div className="flex justify-between font-bold">
+                            <span>Saldo do Cliente:</span>
+                            <span>
+                              {pointsSummary.balancePoints} pts (
+                              {formatCentsToBRL(pointsSummary.balanceValueCents)})
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-emerald-800">
+                            <span>Limite de Resgate nesta Comanda:</span>
+                            <span className="font-bold">
+                              {formatCentsToBRL(pointsSummary.maxAllowedRedemptionCents)}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <p className="text-[11px] text-[var(--text-3)]">
+                        Consultando saldo de pontos do cliente...
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {row.method === "dinheiro" && (
                   <div className="grid grid-cols-2 gap-2 pt-1 border-t border-dashed border-[var(--border)]">
                     <div>
@@ -337,3 +394,4 @@ export function CloseComandaDialog({
     </Dialog>
   );
 }
+

@@ -23,11 +23,14 @@ const getProductByIdMock = vi.fn();
 const debitStockMock = vi.fn();
 vi.mock("../product/product.service", () => ({
   getProductById: (...args: unknown[]) => getProductByIdMock(...args),
-  // Nunca chamado por comanda.service.ts hoje (decisão desta fase — débito de
-  // estoque fica para o fechamento, PDV-07). Mantido aqui só como sensor de
-  // regressão: se algum dia alguém importar/chamar debitStock a partir daqui,
-  // o teste "REGRESSÃO" abaixo detecta.
   debitStock: (...args: unknown[]) => debitStockMock(...args),
+}));
+
+const getCustomerPointsSummaryMock = vi.fn();
+const redeemPointsMock = vi.fn();
+vi.mock("../points/points.service", () => ({
+  getCustomerPointsSummary: (...args: unknown[]) => getCustomerPointsSummaryMock(...args),
+  redeemPoints: (...args: unknown[]) => redeemPointsMock(...args),
 }));
 
 const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda, closeComanda } =
@@ -662,5 +665,104 @@ describe("closeComanda (PDV-07)", () => {
 
     assertFailure(result);
     expect(result.reason).toBe("invalid_cash_received");
+  });
+
+  describe("PDV-08 — Resgate de pontos no fechamento", () => {
+    it("falha com points_anonymous_comanda ao tentar pagar com pontos em comanda sem cliente", async () => {
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ customer_id: null, status: "open" })],
+        [{ total: "5000" }],
+      ]);
+
+      const result = await closeComanda(ctx, {
+        comandaId: COMANDA_ID,
+        payments: [{ paymentMethod: "pontos", amountCents: 1000 }, { paymentMethod: "pix", amountCents: 4000 }],
+      });
+
+      assertFailure(result);
+      expect(result.reason).toBe("points_anonymous_comanda");
+    });
+
+    it("falha com points_disabled se o programa de pontos estiver desativado na arena", async () => {
+      getCustomerPointsSummaryMock.mockResolvedValueOnce({
+        enabled: false,
+        customerId: CUSTOMER_ID,
+        balancePoints: 0,
+        balanceValueCents: 0,
+        maxAllowedRedemptionCents: 0,
+      });
+
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })],
+        [{ total: "5000" }],
+      ]);
+
+      const result = await closeComanda(ctx, {
+        comandaId: COMANDA_ID,
+        payments: [{ paymentMethod: "pontos", amountCents: 1000 }, { paymentMethod: "pix", amountCents: 4000 }],
+      });
+
+      assertFailure(result);
+      expect(result.reason).toBe("points_disabled");
+    });
+
+    it("falha com points_exceed_max_redemption se o valor em pontos exceder o limite da comanda", async () => {
+      getCustomerPointsSummaryMock.mockResolvedValueOnce({
+        enabled: true,
+        customerId: CUSTOMER_ID,
+        balancePoints: 5000,
+        balanceValueCents: 5000,
+        redemptionPointsPerReal: 100,
+        maxAllowedRedemptionCents: 2500, // limite de 50% de 5000 = 2500 centavos
+      });
+
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })],
+        [{ total: "5000" }],
+      ]);
+
+      const result = await closeComanda(ctx, {
+        comandaId: COMANDA_ID,
+        payments: [{ paymentMethod: "pontos", amountCents: 3000 }, { paymentMethod: "pix", amountCents: 2000 }],
+      });
+
+      assertFailure(result);
+      expect(result.reason).toBe("points_exceed_max_redemption");
+    });
+
+    it("fecha a comanda com sucesso debitando os pontos do cliente quando elegível", async () => {
+      getCustomerPointsSummaryMock.mockResolvedValueOnce({
+        enabled: true,
+        customerId: CUSTOMER_ID,
+        balancePoints: 2000,
+        balanceValueCents: 2000,
+        redemptionPointsPerReal: 100,
+        maxAllowedRedemptionCents: 2500,
+      });
+      redeemPointsMock.mockResolvedValueOnce({
+        success: true,
+        pointsRedeemed: 2000,
+        remainingBalance: 0,
+      });
+
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })], // 1. SELECT comanda
+        [{ total: "5000" }], // 2. SELECT comanda_items
+        [makeComandaRow({ customer_id: CUSTOMER_ID, status: "closed" })], // 3. UPDATE comanda
+        [], // 4. SELECT cash_session
+        [makePaymentRow({ payment_method: "pontos", amount_cents: 2000 })], // 5. INSERT payment 1
+        [makePaymentRow({ payment_method: "pix", amount_cents: 3000 })], // 6. INSERT payment 2
+        [{}], // 7. INSERT audit_log
+      ]);
+
+      const result = await closeComanda(ctx, {
+        comandaId: COMANDA_ID,
+        payments: [{ paymentMethod: "pontos", amountCents: 2000 }, { paymentMethod: "pix", amountCents: 3000 }],
+      });
+
+      assertSuccess(result);
+      expect(redeemPointsMock).toHaveBeenCalledWith(ctx, CUSTOMER_ID, 2000, COMANDA_ID);
+      expect(result.comanda.status).toBe("closed");
+    });
   });
 });

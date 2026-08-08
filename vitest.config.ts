@@ -33,6 +33,7 @@ export default defineConfig({
       "@gestao-de-quadras/core/product": path.resolve(__dirname, "./packages/core/src/product/index"),
       "@gestao-de-quadras/core/pdv": path.resolve(__dirname, "./packages/core/src/pdv/index"),
       "@gestao-de-quadras/core/pdv/comanda.service": path.resolve(__dirname, "./packages/core/src/pdv/comanda.service"),
+      "@gestao-de-quadras/core/points": path.resolve(__dirname, "./packages/core/src/points/index"),
       "@gestao-de-quadras/core/whatsapp/whatsapp-connection.service": path.resolve(
         __dirname,
         "./packages/core/src/whatsapp/whatsapp-connection.service"

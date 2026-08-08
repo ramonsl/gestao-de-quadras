@@ -12,9 +12,10 @@ import { ElapsedTime } from "./elapsed-time";
 
 interface CashSessionBarProps {
   initialSession: CashSession | null;
+  openComandasCount: number;
 }
 
-export function CashSessionBar({ initialSession }: CashSessionBarProps) {
+export function CashSessionBar({ initialSession, openComandasCount }: CashSessionBarProps) {
   const router = useRouter();
   const [session, setSession] = useState<CashSession | null>(initialSession);
 
@@ -123,6 +124,7 @@ export function CashSessionBar({ initialSession }: CashSessionBarProps) {
         open={isCloseDialogOpen}
         onOpenChange={setIsCloseDialogOpen}
         cashSessionId={session.id}
+        openComandasCount={openComandasCount}
         onSuccess={handleClosedSuccess}
       />
     </>

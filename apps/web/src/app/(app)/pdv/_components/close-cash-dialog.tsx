@@ -11,6 +11,8 @@ interface CloseCashDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cashSessionId: string;
+  /** Quantidade de comandas em aberto no momento do fechamento — PDV-04 AC4. */
+  openComandasCount: number;
   onSuccess: () => void;
 }
 
@@ -28,6 +30,7 @@ export function CloseCashDialog({
   open,
   onOpenChange,
   cashSessionId,
+  openComandasCount,
   onSuccess,
 }: CloseCashDialogProps) {
   const [summary, setSummary] = useState<CashSessionSummary | null>(null);
@@ -121,6 +124,26 @@ export function CloseCashDialog({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 py-2 text-xs">
+            {/* PDV-04 AC4 — Alerta de comandas abertas ao fechar o caixa */}
+            {openComandasCount > 0 && (
+              <div
+                className="p-3 rounded-[var(--radius-control)] text-sm"
+                style={{
+                  backgroundColor: "var(--warning-bg, #fffbeb)",
+                  border: "1px solid var(--warning-border, #fcd34d)",
+                  color: "var(--warning, #92400e)",
+                }}
+              >
+                ⚠️{" "}
+                <strong>
+                  {openComandasCount === 1
+                    ? "Há 1 comanda em aberto."
+                    : `Há ${openComandasCount} comandas em aberto.`}
+                </strong>{" "}
+                Elas permanecerão abertas para o próximo turno.
+              </div>
+            )}
+
             {errorMessage && (
               <div
                 className="p-3 rounded-[var(--radius-control)] font-medium"

@@ -94,3 +94,44 @@ Como administrador da arena, quero configurar os parâmetros da impressora térm
 *   **Modo Padrão de Impressão no Lançamento:** Permitir configurar uma flag booleana `auto_print_production_tickets` ("Imprimir fichas de produção automaticamente ao lançar itens no PDV"). Quando habilitada, o PDV aciona a impressão de fichas de produção imediatamente após o lançamento sem exigir confirmação adicional do operador.
 *   **Personalização de Cabeçalho e Rodapé:** Permitir configurar o texto de cabeçalho (ex.: Nome Fantasia da Arena, CNPJ) e mensagem de rodapé (ex.: "Obrigado pela preferência!", regras de troca ou QR Code de avaliação) impressos nos comprovantes consolidados de comanda.
 
+---
+
+## CAD-08 [P0] — Perfil 360° e Histórico Consolidado do Cliente
+**Descrição:**
+Como Atendente, Gerente ou Administrador da arena, quero visualizar um painel consolidado (Visão 360°) ao clicar no perfil de um cliente, para consultar instantaneamente seu histórico de compras, débitos pendentes, saldo de aulas, pontuação de fidelidade e frequência de uso de quadras, permitindo um atendimento personalizado e cobranças assertivas.
+
+**Estrutura da Interface (Cards e Seções do Painel):**
+1. **Cabeçalho / Resumo do Perfil:**
+   - **Identificação:** Foto de perfil (se houver), Nome completo, WhatsApp (com atalho para iniciar conversa no WhatsApp Web/App), E-mail e Data de Nascimento.
+   - **Badges de Status:**
+     - *Identidade Global:* Indicador se o cliente é vinculado a `global_customers` (`CAD-01`).
+     - *Opt-in LGPD:* Indicador visual de consentimento para mensagens via WhatsApp na arena atual (Ativo / Inativo).
+     - *Status de Filiação:* Badge destacado se for filiado ativo (ex.: Filiado VIP - Desconto de 10% ativo — `FIL-01`).
+     - *Aniversariante do Mês/Dia:* Destaque visual se o aniversário estiver próximo para facilitar abordagens promocionais (`CRM-01`).
+
+2. **Barramento de Indicadores Chave (Cards de Resumo Financeiro e Saldos):**
+   - **Saldo Devedor / Conta da Arena (`PDV-11`):** Valor monetário acumulado pendente de pagamento (R$). Se > R$ 0,00, exibe card em alerta vermelho. Informações complementares: Limite máximo permitido na arena e percentual utilizado (ex.: R$ 150,00 / Limite R$ 200,00). Ação rápida: Botão "Quitar Saldo Devedor" (abre fluxo de pagamento no PDV).
+   - **Programa de Fidelidade e Cashback (`PTS-01` / `PDV-08`):** Saldo atual em Pontos e conversão direta em Reais (R$) (ex.: 1.500 pts ≈ R$ 15,00). Ação rápida: Botão "Extrato de Pontos" ou "Ajuste Manual de Pontos" (requer Gerente/Admin).
+   - **Saldo de Pacotes de Aulas (`PDV-06`):** Quantidade de aulas restantes disponíveis (ex.: 3 de 8 aulas restantes). Ação rápida: Botão "Debitar 1 Aula" ou "Comprar Novo Pacote".
+   - **Resumo de Consumo Histórico (LTV):** Total acumulado gasto pelo cliente na arena (R$) e quantidade total de comandas e locações realizadas.
+
+3. **Abas Detalhadas de Histórico (Timeline e Tabelas):**
+   - **Aba 1: Comandas e Vendas (`PDV`):** Listagem cronológica de todas as comandas do cliente na arena atual (abertas e fechadas). Colunas: Data/Hora, Código da Comanda, Qtd. de Itens, Valor Total, Meio(s) de Pagamento e Status. Detalhes expansíveis com snapshot dos itens. Ações: "Reimprimir Extrato Consolidado" (`PDV-12`) ou "Ver Comanda Ativa" (`PDV-04`).
+   - **Aba 2: Locações de Quadra e Reservas (`RES-01` / `PDV-05`):** Próximos Agendamentos e Histórico de Locações passadas com estatística de modalidade favorita.
+   - **Aba 3: Frequência e Histórico de Aulas (`PDV-06`):** Extrato de débitos/aquisições de pacotes de aulas e registro de presença.
+   - **Aba 4: Saldo Devedor e Extrato de Cobrança (`PDV-11`):** Detalhamento da origem do saldo devedor e histórico de amortizações.
+
+4. **Ações Rápidas do Gestor (Quick Action Bar):**
+   - ➕ **Abrir Nova Comanda:** Direciona para a interface de adição de itens vinculada ao cliente (`PDV-02`).
+   - 📅 **Reservar Quadra:** Abre a grade de horários com o cliente pré-selecionado (`PDV-05`).
+   - 💳 **Receber Débito Pendente:** Inicia a cobrança direta no PDV (`PDV-11`).
+   - ✏️ **Editar Dados Globais/Locais:** Abre edição de dados do cliente (`CAD-01`/`CAD-06`).
+
+**Critérios de Aceite:**
+*   **Acesso Rápido a partir de Qualquer Ponto do Sistema:** Ao clicar no nome ou foto do cliente em qualquer tela (Grade de Comandas `PDV-04`, Busca do PDV `PDV-02`, Grade de Quadras `PDV-05` ou Relatórios de Clientes `CAD-01`), o sistema abre o modal/painel lateral do Perfil 360° do Cliente.
+*   **Isolamento de Dados por Tenant (Arena):** Histórico de compras, comandas, pontos, saldo devedor e reservas são estritamente restritos à arena atual (tenant).
+*   **Sincronização do Saldo Devedor com Bloqueios:** Se o saldo devedor atual exceder o limite configurado pela arena, a tela exibe um aviso visual destacando o bloqueio de novas comandas/reservas (`PDV-11`).
+*   **Consistência e Imutabilidade de Histórico:** O detalhamento de comandas passadas exibe os valores históricos do momento da compra (`PDV-02`).
+*   **Desempenho:** O carregamento das informações consolidadas abre em menos de 1 segundo.
+
+

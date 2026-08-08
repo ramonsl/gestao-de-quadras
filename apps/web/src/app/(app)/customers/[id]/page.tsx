@@ -1,6 +1,5 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { arenaContext } from "@/lib/session";
+import { requireSession, arenaContext } from "@/lib/session";
 import { getCustomerById } from "@gestao-de-quadras/core/customers/customer.service";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -10,27 +9,19 @@ export default async function CustomerDetailPage({
 }: {
   params: { id: string };
 }) {
-  const session = await auth();
-  if (!session?.user) {
-    redirect("/login");
-  }
-
-  if (!["admin", "gerente", "atendente"].includes(session.user.role ?? "")) {
-    redirect("/dashboard");
-  }
-
-  const ctx = arenaContext(session.user);
+  const session = await requireSession();
+  const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
   const customer = await getCustomerById(ctx, params.id);
 
   if (!customer) {
-    redirect("/dashboard/customers");
+    redirect("/customers");
   }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{customer.name}</h1>
-        <Link href="/dashboard/customers">
+        <Link href="/customers">
           <Button variant="outline">Voltar</Button>
         </Link>
       </div>
@@ -91,7 +82,7 @@ export default async function CustomerDetailPage({
       </div>
 
       <div className="flex gap-2 pt-4">
-        <Link href="/dashboard/customers">
+        <Link href="/customers">
           <Button variant="outline">Voltar para Clientes</Button>
         </Link>
       </div>

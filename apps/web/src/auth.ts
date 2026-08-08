@@ -38,6 +38,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!tenant) return null;
 
         const result = await validateCredentials(identifier, password, tenant.id, db);
+        console.log("validateCredentials resultado:", result);
         if (!result.success) return null;
 
         return {

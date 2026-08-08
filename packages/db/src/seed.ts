@@ -337,34 +337,35 @@ export async function runSeed() {
     .from(comandas)
     .where(sql`tenant_id = ${tenantId} AND status = 'open'`);
 
-  if (openComandas.length === 0) {
-    // Comanda #1: Maria Oliveira
-    const [comanda1] = await db
-      .insert(comandas)
-      .values({
-        tenantId,
-        customerId: createdCustomers[0].id,
-        status: "open",
-        openedByUserId: adminUserId,
-      })
-      .returning();
+  // Garantir que haja comandas abertas de teste com itens
+  const [comanda1] = await db
+    .insert(comandas)
+    .values({
+      tenantId,
+      customerId: createdCustomers[0].id,
+      status: "open",
+      openedByUserId: adminUserId,
+    })
+    .returning();
 
     await db.insert(comandaItems).values([
       {
         tenantId,
         comandaId: comanda1.id,
         productId: createdProducts[0].id,
+        productNameAtSale: createdProducts[0].name,
         quantity: 2,
         unitPriceCentsAtSale: createdProducts[0].salePriceCents,
-        addedByUserId: adminUserId,
+        operatorUserId: adminUserId,
       },
       {
         tenantId,
         comandaId: comanda1.id,
         productId: createdProducts[7].id,
+        productNameAtSale: createdProducts[7].name,
         quantity: 1,
         unitPriceCentsAtSale: createdProducts[7].salePriceCents,
-        addedByUserId: adminUserId,
+        operatorUserId: adminUserId,
       },
     ]);
 
@@ -384,24 +385,23 @@ export async function runSeed() {
         tenantId,
         comandaId: comanda2.id,
         productId: createdProducts[1].id,
+        productNameAtSale: createdProducts[1].name,
         quantity: 1,
         unitPriceCentsAtSale: createdProducts[1].salePriceCents,
-        addedByUserId: adminUserId,
+        operatorUserId: adminUserId,
       },
       {
         tenantId,
         comandaId: comanda2.id,
         productId: createdProducts[4].id,
+        productNameAtSale: createdProducts[4].name,
         quantity: 1,
         unitPriceCentsAtSale: createdProducts[4].salePriceCents,
-        addedByUserId: adminUserId,
+        operatorUserId: adminUserId,
       },
     ]);
 
     console.log("✅ 2 Comandas abertas de teste com produtos lançados no PDV.");
-  } else {
-    console.log(`ℹ️ ${openComandas.length} Comandas em aberto já existentes no PDV.`);
-  }
 
   console.log("\n🚀 Banco semeado com sucesso! Tudo pronto para testes.");
 }

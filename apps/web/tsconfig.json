@@ -31,6 +31,7 @@
       "@gestao-de-quadras/core/product": ["../../packages/core/src/product/index.ts"],
       "@gestao-de-quadras/core/pdv": ["../../packages/core/src/pdv/index.ts"],
       "@gestao-de-quadras/core/pdv/comanda.service": ["../../packages/core/src/pdv/comanda.service.ts"],
+      "@gestao-de-quadras/core/points": ["../../packages/core/src/points/index.ts"],
       "@gestao-de-quadras/core/courts/court.service": ["../../packages/core/src/courts/court.service.ts"],
       "@gestao-de-quadras/core/courts/court-service.service": ["../../packages/core/src/courts/court-service.service.ts"],
       "@gestao-de-quadras/core/courts/court-time-slot.service": ["../../packages/core/src/courts/court-time-slot.service.ts"],

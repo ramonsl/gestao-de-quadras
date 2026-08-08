@@ -4,6 +4,7 @@ import { assertTenantId, rows, type TenantContext } from "../db/tenant";
 import { getCustomerById } from "../customers/customer.service";
 import { getProductById } from "../product/product.service";
 import { getCurrentOpenCashSession } from "./cash-session.service";
+import { getCustomerPointsSummary, redeemPoints } from "../points/points.service";
 
 export interface Comanda {
   id: string;
@@ -460,7 +461,11 @@ export type CloseComandaResult =
         | "comanda_closed"
         | "comanda_empty"
         | "insufficient_payment"
-        | "invalid_cash_received";
+        | "invalid_cash_received"
+        | "points_disabled"
+        | "points_anonymous_comanda"
+        | "points_insufficient_balance"
+        | "points_exceed_max_redemption";
     };
 
 export async function closeComanda(
@@ -492,6 +497,36 @@ export async function closeComanda(
 
   if (totalPaidCents < finalTotalCents) {
     return { success: false, reason: "insufficient_payment" };
+  }
+
+  // PDV-08: Validação do resgate de pontos como meio de pagamento
+  const pointsPayments = data.payments.filter((p) => p.paymentMethod === "pontos");
+  if (pointsPayments.length > 0) {
+    if (!comandaRow.customer_id) {
+      return { success: false, reason: "points_anonymous_comanda" };
+    }
+
+    const pointsSummary = await getCustomerPointsSummary(ctx, comandaRow.customer_id, finalTotalCents);
+    if (!pointsSummary.enabled) {
+      return { success: false, reason: "points_disabled" };
+    }
+
+    const totalPointsCents = pointsPayments.reduce((sum, p) => sum + p.amountCents, 0);
+
+    if (totalPointsCents > pointsSummary.maxAllowedRedemptionCents) {
+      if (totalPointsCents > pointsSummary.balanceValueCents) {
+        return { success: false, reason: "points_insufficient_balance" };
+      } else {
+        return { success: false, reason: "points_exceed_max_redemption" };
+      }
+    }
+
+    // Calcula a quantidade de pontos que precisam ser resgatados
+    const pointsToRedeem = Math.ceil((totalPointsCents * pointsSummary.redemptionPointsPerReal) / 100);
+    const redeemRes = await redeemPoints(ctx, comandaRow.customer_id, pointsToRedeem, data.comandaId);
+    if (!redeemRes.success) {
+      return { success: false, reason: "points_insufficient_balance" };
+    }
   }
 
   // Validação de pagamentos em dinheiro e cálculo de troco

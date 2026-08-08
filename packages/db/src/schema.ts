@@ -608,6 +608,75 @@ export const advertisers = pgTable(
   })
 );
 
+/**
+ * Configurações do Programa de Pontos / Cashback (PTS-01 / PDV-08).
+ * Define se o programa está ativo na arena, regras de acúmulo, taxa de resgate e limites.
+ */
+export const pointsSettings = pgTable(
+  "points_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    enabled: boolean("enabled").default(false).notNull(),
+    /** Taxa de acúmulo: centavos gastos por 1 ponto obtido (ex.: 100 centavos = R$ 1,00 por ponto). */
+    earnRateCentsPerPoint: integer("earn_rate_cents_per_point").default(100).notNull(),
+    /** Taxa de resgate: quantos pontos equivalem a R$ 1,00 de desconto (ex.: 100 pontos = R$ 1,00). */
+    redemptionPointsPerReal: integer("redemption_points_per_real").default(100).notNull(),
+    /** Limite máximo de abatimento da comanda em pontos (%) — ex.: 50 para 50%. */
+    maxRedemptionPercentage: integer("max_redemption_percentage").default(50).notNull(),
+    /** 'all' (todos os clientes) ou 'affiliates_only' (apenas filiados). */
+    allowedParticipants: varchar("allowed_participants", { length: 30 }).default("all").notNull(),
+    /** Período de expiração em dias (ex.: 180). */
+    expirationDays: integer("expiration_days").default(180).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantUnique: uniqueIndex("points_settings_tenant_unique").on(t.tenantId),
+  })
+);
+
+/** Saldo consolidado de pontos do cliente por arena. */
+export const customerPointsBalance = pgTable(
+  "customer_points_balance",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    balance: integer("balance").default(0).notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    customerUnique: uniqueIndex("customer_points_balance_tenant_customer_unique").on(t.tenantId, t.customerId),
+  })
+);
+
+/** Histórico/extrato de movimentações de pontos do cliente. */
+export const customerPointsTransactions = pgTable(
+  "customer_points_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    /** Quantidade de pontos (positivo para crédito/ganho, negativo para débito/resgate/expiração). */
+    amountPoints: integer("amount_points").notNull(),
+    /** 'earn' | 'redeem' | 'expire' | 'adjustment' */
+    transactionType: varchar("transaction_type", { length: 30 }).notNull(),
+    /** ID de referência (ex.: comanda_id). */
+    referenceId: uuid("reference_id"),
+    description: text("description"),
+    operatorUserId: uuid("operator_user_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantCustomerIdx: index("customer_points_tx_tenant_customer_idx").on(t.tenantId, t.customerId),
+  })
+);
+
 // ---------------------------------------------------------------------------
 // Tabelas com escopo de arena (protegidas por RLS). Fonte única para o runner
 // de migrations habilitar RLS e para testes de isolamento.
@@ -636,6 +705,9 @@ export const TENANT_SCOPED_TABLES = [
   "whatsapp_connections",
   "whatsapp_auth_creds",
   "whatsapp_auth_keys",
+  "points_settings",
+  "customer_points_balance",
+  "customer_points_transactions",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -694,3 +766,10 @@ export type AdSpace = typeof adSpaces.$inferSelect;
 export type NewAdSpace = typeof adSpaces.$inferInsert;
 export type Advertiser = typeof advertisers.$inferSelect;
 export type NewAdvertiser = typeof advertisers.$inferInsert;
+export type PointsSettings = typeof pointsSettings.$inferSelect;
+export type NewPointsSettings = typeof pointsSettings.$inferInsert;
+export type CustomerPointsBalance = typeof customerPointsBalance.$inferSelect;
+export type NewCustomerPointsBalance = typeof customerPointsBalance.$inferInsert;
+export type CustomerPointsTransactions = typeof customerPointsTransactions.$inferSelect;
+export type NewCustomerPointsTransactions = typeof customerPointsTransactions.$inferInsert;
+

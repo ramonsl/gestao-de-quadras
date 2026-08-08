@@ -11,7 +11,8 @@
     "dev": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "db:seed": "npm run db:seed --workspace=packages/db"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -21,7 +21,7 @@ export default async function PdvPage() {
   return (
     <main className="flex-1 p-5 md:p-6 space-y-6 max-w-7xl mx-auto w-full relative min-h-[calc(100vh-4rem)]">
       {/* Barra de Status do Caixa */}
-      <CashSessionBar initialSession={currentCashSession} />
+      <CashSessionBar initialSession={currentCashSession} openComandasCount={openComandas.length} />
 
       <section className="space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">

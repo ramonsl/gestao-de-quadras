@@ -11,7 +11,7 @@ export default async function ComandaPage({
   params: Promise<{ comandaId: string }>;
 }) {
   const { comandaId } = await params;
-  const { ctx } = await requireModule("pdv");
+  const { session, ctx } = await requireModule("pdv");
 
   const comanda = await getComandaWithItems(ctx, comandaId);
   if (!comanda) notFound();
@@ -20,7 +20,7 @@ export default async function ComandaPage({
 
   return (
     <main className="flex-1 p-[22px]">
-      <ComandaWorkspace comanda={comanda} products={products} />
+      <ComandaWorkspace comanda={comanda} products={products} userRole={session.role} />
     </main>
   );
 }

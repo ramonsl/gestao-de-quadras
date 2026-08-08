@@ -33,7 +33,7 @@ vi.mock("../points/points.service", () => ({
   redeemPoints: (...args: unknown[]) => redeemPointsMock(...args),
 }));
 
-const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda, closeComanda } =
+const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda, closeComanda, cancelComandaItem } =
   await import("./comanda.service");
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
@@ -763,6 +763,77 @@ describe("closeComanda (PDV-07)", () => {
       assertSuccess(result);
       expect(redeemPointsMock).toHaveBeenCalledWith(ctx, CUSTOMER_ID, 2000, COMANDA_ID);
       expect(result.comanda.status).toBe("closed");
+    });
+  });
+
+  describe("cancelComandaItem (PDV-09)", () => {
+    const ITEM_ID = "66666666-6666-4666-8666-666666666666";
+
+    it("cancela o item com sucesso quando o operador é admin/gerente", async () => {
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ status: "open" })], // 1. SELECT comanda
+        [{ id: ITEM_ID, comanda_id: COMANDA_ID, product_id: PRODUCT_ID, quantity: 1, unit_price_cents_at_sale: 1000 }], // 2. SELECT comanda_items
+        [{ role: "admin" }], // 3. SELECT user role
+        [], // 4. DELETE comanda_items
+        [{}], // 5. INSERT audit_log
+      ]);
+
+      const result = await cancelComandaItem(ctx, {
+        comandaId: COMANDA_ID,
+        comandaItemId: ITEM_ID,
+        reason: "Cliente desistiu da bebida antes de abrir",
+      });
+
+      assertSuccess(result);
+      expect(result.comandaItemId).toBe(ITEM_ID);
+    });
+
+    it("falha com comanda_closed se a comanda já estiver fechada", async () => {
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ status: "closed" })],
+      ]);
+
+      const result = await cancelComandaItem(ctx, {
+        comandaId: COMANDA_ID,
+        comandaItemId: ITEM_ID,
+        reason: "Item lançado por engano na comanda",
+      });
+
+      assertFailure(result);
+      expect(result.reason).toBe("comanda_closed");
+    });
+
+    it("falha com item_not_found se o item não existir na comanda", async () => {
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ status: "open" })],
+        [], // SELECT comanda_items -> vazio
+      ]);
+
+      const result = await cancelComandaItem(ctx, {
+        comandaId: COMANDA_ID,
+        comandaItemId: ITEM_ID,
+        reason: "Item lançado por engano",
+      });
+
+      assertFailure(result);
+      expect(result.reason).toBe("item_not_found");
+    });
+
+    it("falha com unauthorized se o operador atendente não fornecer a senha do supervisor", async () => {
+      const ctx = mkQueueCtx([
+        [makeComandaRow({ status: "open" })],
+        [{ id: ITEM_ID, comanda_id: COMANDA_ID, product_id: PRODUCT_ID, quantity: 1, unit_price_cents_at_sale: 1000 }],
+        [{ role: "atendente" }],
+      ]);
+
+      const result = await cancelComandaItem(ctx, {
+        comandaId: COMANDA_ID,
+        comandaItemId: ITEM_ID,
+        reason: "Cancelamento solicitado pelo cliente",
+      });
+
+      assertFailure(result);
+      expect(result.reason).toBe("unauthorized");
     });
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sql } from "drizzle-orm";
+import { verify } from "@node-rs/argon2";
 import { assertTenantId, rows, type TenantContext } from "../db/tenant";
 import { getCustomerById } from "../customers/customer.service";
 import { getProductById } from "../product/product.service";
@@ -594,3 +595,115 @@ export async function closeComanda(
 
   return { success: true, comanda, payments: paymentViews, totalChangeCents };
 }
+
+// --- Cancelamento de item de comanda (PDV-09) -------------------------------
+
+export const CancelComandaItemInputSchema = z.object({
+  comandaId: z.string().uuid(),
+  comandaItemId: z.string().uuid(),
+  reason: z.string().trim().min(5, "A justificativa deve ter no mínimo 5 caracteres."),
+  supervisorPassword: z.string().optional(),
+});
+
+export type CancelComandaItemResult =
+  | { success: true; comandaItemId: string }
+  | {
+      success: false;
+      reason:
+        | "comanda_not_found"
+        | "comanda_closed"
+        | "item_not_found"
+        | "unauthorized"
+        | "invalid_supervisor_password";
+    };
+
+export async function cancelComandaItem(
+  ctx: TenantContext,
+  input: z.infer<typeof CancelComandaItemInputSchema>
+): Promise<CancelComandaItemResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("cancelComandaItem exige ctx.actorUserId.");
+  }
+  const data = CancelComandaItemInputSchema.parse(input);
+
+  // 1. Verifica se a comanda existe e está aberta
+  const comandaResult = await ctx.db.execute<ComandaRow>(
+    sql`SELECT ${COMANDA_COLS} FROM comandas WHERE id = ${data.comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const comandaRow = rows<ComandaRow>(comandaResult)[0];
+  if (!comandaRow) return { success: false, reason: "comanda_not_found" };
+  if (comandaRow.status !== "open") return { success: false, reason: "comanda_closed" };
+
+  // 2. Busca o item a ser cancelado
+  const itemResult = await ctx.db.execute<ComandaItemRow>(
+    sql`SELECT ${ITEM_COLS} FROM comanda_items
+        WHERE id = ${data.comandaItemId} AND comanda_id = ${data.comandaId} AND tenant_id = ${ctx.tenantId}
+        LIMIT 1`
+  );
+  const itemRow = rows<ComandaItemRow>(itemResult)[0];
+  if (!itemRow) return { success: false, reason: "item_not_found" };
+
+  // 3. Verifica permissões de supervisor
+  const actorResult = await ctx.db.execute<{ role: string }>(
+    sql`SELECT role FROM users_tenants WHERE id = ${ctx.actorUserId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const actorRole = rows<{ role: string }>(actorResult)[0]?.role;
+
+  let supervisorUserId = ctx.actorUserId;
+
+  if (actorRole === "admin" || actorRole === "gerente") {
+    // Autorizado diretamente pelo próprio perfil do operador
+  } else {
+    // Atendente ou outro perfil: exige senha de supervisor (admin/gerente)
+    if (!data.supervisorPassword) {
+      return { success: false, reason: "unauthorized" };
+    }
+
+    const supervisorsResult = await ctx.db.execute<{ id: string; password_hash: string | null }>(
+      sql`SELECT id, password_hash FROM users_tenants
+          WHERE tenant_id = ${ctx.tenantId}
+            AND role IN ('admin', 'gerente')
+            AND status = 'active'`
+    );
+    const supervisors = rows<{ id: string; password_hash: string | null }>(supervisorsResult);
+
+    let validSupervisorId: string | null = null;
+    for (const sup of supervisors) {
+      if (sup.password_hash) {
+        const matches = await verify(sup.password_hash, data.supervisorPassword);
+        if (matches) {
+          validSupervisorId = sup.id;
+          break;
+        }
+      }
+    }
+
+    if (!validSupervisorId) {
+      return { success: false, reason: "invalid_supervisor_password" };
+    }
+
+    supervisorUserId = validSupervisorId;
+  }
+
+  // 4. Deleta o item da comanda
+  await ctx.db.execute(
+    sql`DELETE FROM comanda_items
+        WHERE id = ${data.comandaItemId} AND comanda_id = ${data.comandaId} AND tenant_id = ${ctx.tenantId}`
+  );
+
+  // 5. Registra log de auditoria
+  await writeAudit(ctx, "pdv.item.cancelled", {
+    comandaId: data.comandaId,
+    comandaItemId: data.comandaItemId,
+    productId: itemRow.product_id,
+    quantity: itemRow.quantity,
+    unitPriceCents: itemRow.unit_price_cents_at_sale,
+    reason: data.reason,
+    cancelledByUserId: ctx.actorUserId,
+    supervisorUserId,
+  });
+
+  return { success: true, comandaItemId: data.comandaItemId };
+}
+

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { PrintTicketToggle } from "./print-ticket-toggle";
 import { ProductSelectorGrid } from "./product-selector-grid";
 import { CloseComandaDialog } from "./close-comanda-dialog";
+import { CancelItemDialog } from "./cancel-item-dialog";
 import { CustomerSearchCombobox } from "../../_components/customer-search-combobox";
 import {
   QuickCreateCustomerDialog,
@@ -29,6 +30,7 @@ import {
 interface ComandaWorkspaceProps {
   comanda: ComandaWithItems;
   products: Product[];
+  userRole?: string;
 }
 
 interface PendingItem {
@@ -44,7 +46,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   pontos: "Pontos / Cashback",
 };
 
-export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaWorkspaceProps) {
+export function ComandaWorkspace({ comanda: initialComanda, products, userRole }: ComandaWorkspaceProps) {
   const router = useRouter();
   const comandaId = initialComanda.id;
 
@@ -55,6 +57,8 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
   const [items, setItems] = useState<ComandaItemView[]>(initialComanda.items);
   const [payments, setPayments] = useState<ComandaPaymentView[]>(initialComanda.payments ?? []);
   const [totalCents, setTotalCents] = useState(initialComanda.totalCents);
+
+  const [cancellingItem, setCancellingItem] = useState<ComandaItemView | null>(null);
 
   useEffect(() => {
     setStatus(initialComanda.status);
@@ -492,12 +496,13 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
                   <th className="text-right px-4 py-2.5">Qtd</th>
                   <th className="text-right px-4 py-2.5">Unit.</th>
                   <th className="text-right px-4 py-2.5">Total</th>
+                  {!isClosed && <th className="text-center px-4 py-2.5 w-16">Ações</th>}
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-[var(--text-3)]">
+                    <td colSpan={isClosed ? 4 : 5} className="px-4 py-8 text-center text-[var(--text-3)]">
                       Nenhum item lançado ainda.
                     </td>
                   </tr>
@@ -514,6 +519,18 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
                       <td className="px-4 py-3 text-right font-semibold text-[var(--text-1)]">
                         {formatCentsToBRL(item.lineTotalCents)}
                       </td>
+                      {!isClosed && (
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setCancellingItem(item)}
+                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                            title="Cancelar este item"
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -625,6 +642,25 @@ export function ComandaWorkspace({ comanda: initialComanda, products }: ComandaW
         onOpenChange={setQuickCreateOpen}
         onCreated={handleCustomerCreatedForLink}
       />
+
+      {cancellingItem && (
+        <CancelItemDialog
+          open={cancellingItem !== null}
+          onOpenChange={(open) => {
+            if (!open) setCancellingItem(null);
+          }}
+          comandaId={comandaId}
+          comandaItemId={cancellingItem.id}
+          itemProductName={cancellingItem.productNameAtSale}
+          itemQuantity={cancellingItem.quantity}
+          itemTotalPriceCents={cancellingItem.lineTotalCents}
+          userRole={userRole}
+          onSuccess={() => {
+            setCancellingItem(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

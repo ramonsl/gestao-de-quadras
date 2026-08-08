@@ -11,6 +11,8 @@ export {
   PaymentInputSchema,
   CloseComandaInputSchema,
   closeComanda,
+  CancelComandaItemInputSchema,
+  cancelComandaItem,
   type Comanda,
   type ComandaItemView,
   type ComandaPaymentView,
@@ -20,6 +22,7 @@ export {
   type AddComandaItemResult,
   type LinkCustomerToComandaResult,
   type CloseComandaResult,
+  type CancelComandaItemResult,
 } from "./comanda.service";
 
 export {

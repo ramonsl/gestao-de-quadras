@@ -274,36 +274,41 @@ export function CloseComandaDialog({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-[var(--text-3)] block mb-0.5">Meio</label>
-                    <select
-                      value={row.method}
-                      onChange={(e) =>
-                        handleUpdatePaymentRow(row.id, "method", e.target.value as PaymentMethod)
-                      }
-                      className="w-full h-9 px-2 bg-white border border-[var(--border)] rounded text-xs outline-none focus:border-[var(--accent)]"
-                    >
-                      {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
-                        <option key={m} value={m}>
+                {/* Meio de pagamento — botões (mesmo padrão da Quitação de Saldo Devedor) */}
+                <div>
+                  <label className="text-[10px] text-[var(--text-3)] block mb-1">Meio de Pagamento</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => {
+                      const active = row.method === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => handleUpdatePaymentRow(row.id, "method", m)}
+                          className={`py-1.5 px-2 text-[11px] font-semibold rounded border transition-all ${
+                            active
+                              ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                              : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
+                          }`}
+                        >
                           {PAYMENT_LABELS[m]}
-                        </option>
-                      ))}
-                    </select>
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-[10px] text-[var(--text-3)] block mb-0.5">
-                      Valor a Cobrar (R$)
-                    </label>
-                    <input
-                      type="text"
-                      value={row.amountStr}
-                      onChange={(e) => handleUpdatePaymentRow(row.id, "amountStr", e.target.value)}
-                      placeholder="0,00"
-                      className="w-full h-9 px-2 bg-white border border-[var(--border)] rounded text-xs outline-none font-semibold focus:border-[var(--accent)] text-right"
-                    />
-                  </div>
+                <div>
+                  <label className="text-[10px] text-[var(--text-3)] block mb-0.5">
+                    Valor a Cobrar (R$)
+                  </label>
+                  <input
+                    type="text"
+                    value={row.amountStr}
+                    onChange={(e) => handleUpdatePaymentRow(row.id, "amountStr", e.target.value)}
+                    placeholder="0,00"
+                    className="w-full h-9 px-2 bg-white border border-[var(--border)] rounded text-sm outline-none font-semibold focus:border-[var(--accent)] text-right"
+                  />
                 </div>
 
                 {row.method === "pontos" && (
@@ -343,7 +348,7 @@ export function CloseComandaDialog({
                 )}
 
                 {row.method === "dinheiro" && (
-                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-dashed border-[var(--border)]">
+                  <div className="pt-2 border-t border-dashed border-[var(--border)] space-y-2">
                     <div>
                       <label className="text-[10px] text-[var(--text-3)] block mb-0.5">
                         Valor Recebido (R$)
@@ -353,20 +358,27 @@ export function CloseComandaDialog({
                         value={row.receivedStr}
                         onChange={(e) => handleUpdatePaymentRow(row.id, "receivedStr", e.target.value)}
                         placeholder={row.amountStr}
-                        className="w-full h-8 px-2 bg-emerald-50/50 border border-emerald-300 rounded text-xs outline-none text-right font-medium"
+                        className="w-full h-10 px-3 bg-emerald-50/50 border border-emerald-300 rounded-[var(--radius-control)] text-base outline-none text-right font-bold focus:border-[var(--accent)]"
                       />
                     </div>
-                    <div className="flex flex-col justify-center text-right">
-                      <span className="text-[10px] text-[var(--text-3)]">Troco Desta Forma</span>
-                      <span className="font-bold text-xs text-emerald-700">
-                        {formatCentsToBRL(
-                          Math.max(
-                            0,
-                            (row.receivedStr ? parseCents(row.receivedStr) : parseCents(row.amountStr)) -
-                              parseCents(row.amountStr)
-                          )
-                        )}
-                      </span>
+                    <div className="flex justify-between items-baseline px-0.5">
+                      <span className="text-xs font-bold text-[var(--text-2)]">Troco a Devolver:</span>
+                      {(() => {
+                        const troco = Math.max(
+                          0,
+                          (row.receivedStr ? parseCents(row.receivedStr) : parseCents(row.amountStr)) -
+                            parseCents(row.amountStr)
+                        );
+                        return (
+                          <span
+                            className={`text-base font-extrabold tabular-nums ${
+                              troco > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
+                            }`}
+                          >
+                            {formatCentsToBRL(troco)}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}

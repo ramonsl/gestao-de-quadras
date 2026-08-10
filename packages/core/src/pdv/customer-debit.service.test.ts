@@ -3,6 +3,7 @@ import {
   getCustomerDebitSummary,
   transferComandaToCustomerDebit,
   settleCustomerDebit,
+  CUSTOMER_DEBIT_LIMIT_CENTS,
 } from "./customer-debit.service";
 import type { TenantContext } from "../db/tenant";
 
@@ -235,6 +236,97 @@ describe("customer-debit.service (PDV-11)", () => {
       if (res.success) {
         expect(res.settledCents).toBe(5000);
         expect(res.remainingDebitCents).toBe(0);
+      }
+    });
+  });
+
+  /**
+   * Regressão do refactor boy-scout (CAD-08): a constante `MAX_LIMIT_CENTS`,
+   * antes hardcoded no corpo de `transferComandaToCustomerDebit`, foi extraída
+   * para `CUSTOMER_DEBIT_LIMIT_CENTS` e passou a ser compartilhada com o Perfil
+   * 360°. Estes testes travam o valor (20.000 = R$ 200,00) E provam que é ele o
+   * limite efetivamente aplicado na transferência — a fronteira (== limite passa,
+   * limite + 1 bloqueia).
+   */
+  describe("CUSTOMER_DEBIT_LIMIT_CENTS (regressão do limite extraído)", () => {
+    /** Monta a fila de execução de uma comanda aberta com um único item. */
+    function openComandaQueue(totalCents: number): unknown[][] {
+      return [
+        // getComandaWithItems -> SELECT comanda + customer
+        [
+          {
+            id: COMANDA_ID,
+            tenant_id: TENANT_ID,
+            customer_id: CUSTOMER_ID,
+            status: "open",
+            opened_by_user_id: ACTOR_ID,
+            created_at: new Date(),
+            customer_name: "Maria",
+            customer_whatsapp: "+5511999999999",
+          },
+        ],
+        // getComandaWithItems -> SELECT items (total = quantity * unit_price)
+        [
+          {
+            id: "item-1",
+            comanda_id: COMANDA_ID,
+            product_id: "prod-1",
+            quantity: 1,
+            unit_price_cents_at_sale: totalCents,
+            product_name: "Item",
+            created_at: new Date(),
+          },
+        ],
+        // getComandaWithItems -> SELECT payments
+        [],
+      ];
+    }
+
+    it("expõe o limite fixado em 20.000 centavos (R$ 200,00)", () => {
+      expect(CUSTOMER_DEBIT_LIMIT_CENTS).toBe(20000);
+    });
+
+    it("permite a transferência quando o saldo devedor resultante é exatamente o limite", async () => {
+      const ctx = mkQueueCtx([
+        ...openComandaQueue(CUSTOMER_DEBIT_LIMIT_CENTS),
+        // getCustomerDebitSummary -> SELECT débitos existentes (0)
+        [],
+        // getCurrentOpenCashSession -> SELECT cash_sessions
+        [],
+        // UPDATE comandas SET status = 'closed'
+        [],
+        // INSERT comanda_payments ('conta_cliente')
+        [],
+        // INSERT customer_debits RETURNING
+        [makeDebitRow({ amount_cents: CUSTOMER_DEBIT_LIMIT_CENTS })],
+        // audit log
+        [],
+      ]);
+
+      const res = await transferComandaToCustomerDebit(ctx, {
+        comandaId: COMANDA_ID,
+        customerId: CUSTOMER_ID,
+      });
+
+      expect(res.success).toBe(true);
+    });
+
+    it("bloqueia a transferência que ultrapassa o limite em 1 centavo, reportando CUSTOMER_DEBIT_LIMIT_CENTS", async () => {
+      const ctx = mkQueueCtx([
+        ...openComandaQueue(CUSTOMER_DEBIT_LIMIT_CENTS + 1),
+        // getCustomerDebitSummary -> SELECT débitos existentes (0)
+        [],
+      ]);
+
+      const res = await transferComandaToCustomerDebit(ctx, {
+        comandaId: COMANDA_ID,
+        customerId: CUSTOMER_ID,
+      });
+
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.reason).toBe("limit_exceeded");
+        expect(res.maxLimitCents).toBe(CUSTOMER_DEBIT_LIMIT_CENTS);
       }
     });
   });

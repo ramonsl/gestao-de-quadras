@@ -134,4 +134,23 @@ Como Atendente, Gerente ou Administrador da arena, quero visualizar um painel co
 *   **Consistência e Imutabilidade de Histórico:** O detalhamento de comandas passadas exibe os valores históricos do momento da compra (`PDV-02`).
 *   **Desempenho:** O carregamento das informações consolidadas abre em menos de 1 segundo.
 
+> **Nota de escopo (Fase 1) — Decisão (2026-08-10):** entregue nesta fase o que
+> não depende de módulos ainda não implementados. Itens abaixo permanecem no AC
+> como alvo, mas foram ajustados/adiados na Fase 1:
+> - **Aba "Locações e Reservas"** e **badge "Status de Filiação":** entregues como
+>   placeholder "em breve" — dependem de RES-01/PDV-05 (reservas) e FIL-01
+>   (filiação), ainda não implementados.
+> - **Registro de presença por aula** e **extrato de amortizações de débito:** fora
+>   da Fase 1. A aba de Aulas mostra os saldos atuais e a aba de Saldo Devedor
+>   mostra os débitos pendentes.
+> - **Acesso "de qualquer ponto do sistema":** na Fase 1 o Perfil 360° é uma **rota
+>   dedicada** (`/customers/[id]`) e o nome do cliente é clicável na lista de
+>   clientes. A instrumentação de um modal/painel lateral disparável das demais
+>   telas (PDV-04, grade de quadras) fica para um passo dedicado.
+> - **Limite de saldo devedor:** usa a constante global `CUSTOMER_DEBIT_LIMIT_CENTS`
+>   (R$ 200,00); limite configurável por arena depende da config de PDV-11 (não
+>   implementada).
+> - **Guarda de acesso:** a rota usa `requireSession()` (autenticado), consistente
+>   com o restante da área de clientes; padronização para `requireModule("crm")`
+>   fica como follow-up.
 

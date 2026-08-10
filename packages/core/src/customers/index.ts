@@ -17,3 +17,17 @@ export {
   type LocalCustomer,
   type QuickCreateCustomerResult,
 } from "./customer.service";
+
+export {
+  listCustomerComandas,
+  listCustomerClassBalances,
+  getCustomerOptInStatus,
+  getCustomerProfile360,
+  type CustomerComandaHistoryItem,
+  type CustomerClassBalanceItem,
+  type CustomerOptInStatus,
+  type CustomerProfileDebit,
+  type CustomerProfileDebitLine,
+  type CustomerProfileLtv,
+  type CustomerProfile360,
+} from "./customer-profile.service";

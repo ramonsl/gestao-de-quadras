@@ -64,7 +64,12 @@ export default async function CustomersPage() {
                 {customers.map((customer) => (
                   <tr key={customer.id} className="border-b border-[var(--border-soft)] last:border-0 hover:bg-[var(--bg-sunken)] transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-[var(--text-1)]">{customer.name}</div>
+                      <Link
+                        href={`/customers/${customer.id}`}
+                        className="font-medium text-[var(--text-1)] hover:text-[var(--accent)]"
+                      >
+                        {customer.name}
+                      </Link>
                       <div className="text-[var(--text-3)]">{customer.whatsapp}</div>
                     </td>
                     <td className="px-4 py-3 text-[var(--text-2)]">{customer.email || "—"}</td>

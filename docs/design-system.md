@@ -40,10 +40,10 @@ Sistema de design para o **Arena SaaS**: plataforma multi-tenant de gestão de a
 
 ## ICONOGRAFIA
 
-- **Não há icon font nem set de SVGs no projeto.** O protótipo usa **quadrados arredondados 16px** como placeholders de ícone — manter até um set ser escolhido.
-- Recomendação futura: **Lucide** via CDN (stroke 1.5–2). Registrar a troca neste arquivo quando acontecer.
+- **Icon set oficial: Lucide (`lucide-react`, stroke 1.5–2).** Adotado como padrão do projeto (CLAUDE.md, regra 12; primeiro uso em CAD-08). Novos componentes usam ícones do Lucide; os **quadrados arredondados 16px** do protótipo são placeholders legados a substituir conforme as telas forem tocadas.
 - **Logo:** não fornecido. Marca provisória = tile arredondado com "A". Cada arena exibe seu próprio nome + tile no topo da sidebar.
 - Avatares: círculo `#e4e2db` com iniciais 11/600.
+- **Avatar hero / perfil (aprovado — CAD-08):** variante maior para cabeçalho de perfil — 56px, fundo `var(--accent-tint)`, texto `var(--accent)`, iniciais em tamanho maior que o avatar padrão.
 
 ---
 

@@ -16,6 +16,7 @@ import {
   cashSessions,
   comandas,
   comandaItems,
+  customerDebits,
 } from "./schema";
 import { getDatabaseUrl } from "./env";
 
@@ -402,6 +403,32 @@ export async function runSeed() {
     ]);
 
     console.log("✅ 2 Comandas abertas de teste com produtos lançados no PDV.");
+
+  // 11. Saldo Devedor de Teste (CAD-08 / PDV-11)
+  // Maria Oliveira acumula um débito acima do limite da arena (R$ 200,00 =
+  // 20.000 centavos), o que aciona o bloqueio visual de novas comandas/reservas
+  // no Perfil 360° (critério "Sincronização do Saldo Devedor com Bloqueios").
+  const maria = createdCustomers[0];
+  const existingDebit = await db
+    .select()
+    .from(customerDebits)
+    .where(sql`tenant_id = ${tenantId} AND customer_id = ${maria.id} AND status != 'settled'`)
+    .limit(1);
+
+  if (existingDebit.length === 0) {
+    await db.insert(customerDebits).values({
+      tenantId,
+      customerId: maria.id,
+      comandaId: null,
+      amountCents: 25000, // R$ 250,00 — acima do limite de R$ 200,00 → bloqueado
+      paidCents: 0,
+      status: "pending",
+      operatorUserId: adminUserId,
+    });
+    console.log(`✅ Saldo devedor de teste (R$ 250,00) lançado para ${maria.name} — dispara bloqueio.`);
+  } else {
+    console.log(`ℹ️ Saldo devedor de teste já existente para ${maria.name}.`);
+  }
 
   console.log("\n🚀 Banco semeado com sucesso! Tudo pronto para testes.");
 }

@@ -5,6 +5,14 @@ import { getComandaWithItems } from "./comanda.service";
 import { getCurrentOpenCashSession } from "./cash-session.service";
 import type { CustomerDebit, CustomerDebitPayment } from "@gestao-de-quadras/db/schema";
 
+/**
+ * Limite de saldo devedor por cliente na arena (padrão: R$ 200,00 = 20.000
+ * centavos). Ainda não é configurável por tenant (config de PDV-11 não
+ * implementada) — centralizado aqui para uso único (transferência de comanda
+ * para conta e Perfil 360° do cliente, CAD-08).
+ */
+export const CUSTOMER_DEBIT_LIMIT_CENTS = 20000;
+
 export const TransferToDebitInputSchema = z.object({
   comandaId: z.string().uuid(),
   customerId: z.string().uuid(),
@@ -153,13 +161,12 @@ export async function transferComandaToCustomerDebit(
   }
 
   // Verifica limite de saldo devedor por tenant (padrão: R$ 200,00 = 20.000 centavos)
-  const MAX_LIMIT_CENTS = 20000;
   const summary = await getCustomerDebitSummary(ctx, data.customerId);
-  if (summary.totalPendingCents + comanda.totalCents > MAX_LIMIT_CENTS) {
+  if (summary.totalPendingCents + comanda.totalCents > CUSTOMER_DEBIT_LIMIT_CENTS) {
     return {
       success: false,
       reason: "limit_exceeded",
-      maxLimitCents: MAX_LIMIT_CENTS,
+      maxLimitCents: CUSTOMER_DEBIT_LIMIT_CENTS,
       currentDebitCents: summary.totalPendingCents,
     };
   }

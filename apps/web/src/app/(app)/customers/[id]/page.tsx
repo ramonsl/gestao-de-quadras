@@ -1,92 +1,76 @@
 import { redirect } from "next/navigation";
-import { requireSession, arenaContext } from "@/lib/session";
-import { getCustomerById } from "@gestao-de-quadras/core/customers/customer.service";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { requireSession, arenaContext } from "@/lib/session";
+import { getCustomerProfile360 } from "@gestao-de-quadras/core/customers/customer-profile.service";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ProfileHeader } from "./_components/profile-header";
+import { IndicatorCards } from "./_components/indicator-cards";
+import { QuickActionBar } from "./_components/quick-action-bar";
+import { ProfileTabs } from "./_components/profile-tabs";
 
-export default async function CustomerDetailPage({
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export default async function CustomerProfilePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // Um id malformado bateria no cast uuid do Postgres (erro 500) em vez de
+  // seguir o caminho previsto — redireciona antes de tocar o banco.
+  if (!UUID_PATTERN.test(id)) {
+    redirect("/customers");
+  }
+
   const session = await requireSession();
   const ctx = arenaContext({ id: session.userId, tenantId: session.tenantId });
-  const customer = await getCustomerById(ctx, id);
+  const profile = await getCustomerProfile360(ctx, id);
 
-  if (!customer) {
+  if (!profile) {
     redirect("/customers");
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">{customer.name}</h1>
-        <Link href="/customers">
-          <Button variant="outline">Voltar</Button>
+    <>
+      <header className="h-14 shrink-0 px-[22px] flex items-center gap-3 bg-white border-b border-[var(--border)]">
+        <Link
+          href="/customers"
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--text-2)] hover:text-[var(--text-1)]"
+        >
+          <ArrowLeft className="size-4" /> Clientes
         </Link>
-      </div>
+        <span className="text-[var(--text-3)]">/</span>
+        <span className="text-[13px] font-semibold text-[var(--text-1)] truncate">
+          {profile.customer.name}
+        </span>
+      </header>
 
-      <div className="border rounded-lg p-6 space-y-4">
-        <div>
-          <p className="text-sm text-gray-600">WhatsApp</p>
-          <p className="text-lg font-medium">{customer.whatsapp}</p>
-        </div>
+      <main className="flex-1 min-h-0 overflow-auto p-[22px] space-y-4">
+        <ProfileHeader profile={profile} />
 
-        {customer.email && (
-          <div>
-            <p className="text-sm text-gray-600">Email</p>
-            <p className="text-lg font-medium">{customer.email}</p>
-          </div>
+        {profile.debit.isBlocked && (
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertTitle>Novas comandas e reservas bloqueadas</AlertTitle>
+            <AlertDescription>
+              O saldo devedor deste cliente atingiu o limite da arena. Quite o saldo pendente para
+              liberar novos lançamentos.
+            </AlertDescription>
+          </Alert>
         )}
 
-        {customer.birthDate && (
-          <div>
-            <p className="text-sm text-gray-600">Data de Nascimento</p>
-            <p className="text-lg font-medium">
-              {new Date(customer.birthDate).toLocaleDateString("pt-BR")}
-            </p>
-          </div>
-        )}
+        <IndicatorCards profile={profile} />
 
-        <div>
-          <p className="text-sm text-gray-600">Status</p>
-          <span
-            className={`inline-block px-3 py-1 rounded text-sm font-medium ${
-              customer.status === "active"
-                ? "bg-green-100 text-green-800"
-                : "bg-red-100 text-red-800"
-            }`}
-          >
-            {customer.status === "active" ? "Ativo" : "Inativo"}
-          </span>
-        </div>
+        <QuickActionBar />
 
-        {customer.globalCustomerId && (
-          <div>
-            <p className="text-sm text-gray-600">ID Global (Cross-Arena)</p>
-            <p className="text-sm font-mono text-gray-500">
-              {customer.globalCustomerId}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Este cliente existe em outras arenas do sistema
-            </p>
-          </div>
-        )}
-
-        <div>
-          <p className="text-sm text-gray-600">Criado em</p>
-          <p className="text-sm text-gray-500">
-            {new Date(customer.createdAt).toLocaleString("pt-BR")}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-2 pt-4">
-        <Link href="/customers">
-          <Button variant="outline">Voltar para Clientes</Button>
-        </Link>
-      </div>
-    </div>
+        <ProfileTabs
+          comandas={profile.comandas}
+          classBalances={profile.classBalances}
+          debit={profile.debit}
+        />
+      </main>
+    </>
   );
 }

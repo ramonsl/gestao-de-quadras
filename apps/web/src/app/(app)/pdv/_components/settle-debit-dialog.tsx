@@ -36,6 +36,7 @@ export function SettleDebitDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<MethodKey>("pix");
   const [amountStr, setAmountStr] = useState("");
+  const [receivedStr, setReceivedStr] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -166,6 +167,43 @@ export function SettleDebitDialog({
                 className="w-full h-11 px-3 bg-white border border-[var(--border)] rounded-[var(--radius-control)] font-bold text-lg text-right outline-none focus:border-[var(--accent)]"
               />
             </div>
+
+            {/* Valor recebido + troco (apenas em dinheiro) — conveniência de
+                conferência para o atendente; o valor aplicado ao débito é o
+                "Valor a Quitar" (troco não é registrado). */}
+            {selectedMethod === "dinheiro" && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs font-bold text-[var(--text-2)] block mb-1">
+                    Valor Recebido (R$)
+                  </label>
+                  <input
+                    type="text"
+                    value={receivedStr}
+                    onChange={(e) => setReceivedStr(e.target.value)}
+                    placeholder={amountStr || "0,00"}
+                    className="w-full h-11 px-3 bg-emerald-50/50 border border-emerald-300 rounded-[var(--radius-control)] font-medium text-lg text-right outline-none focus:border-[var(--accent)]"
+                  />
+                </div>
+                <div className="flex justify-between items-baseline px-1">
+                  <span className="text-sm font-bold text-[var(--text-2)]">Troco a Devolver:</span>
+                  {(() => {
+                    const amountCents = parseCents(amountStr);
+                    const receivedCents = receivedStr ? parseCents(receivedStr) : amountCents;
+                    const changeCents = Math.max(0, receivedCents - amountCents);
+                    return (
+                      <span
+                        className={`text-base font-extrabold tabular-nums ${
+                          changeCents > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
+                        }`}
+                      >
+                        {formatCentsToBRL(changeCents)}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
 
             <div className="pt-2 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

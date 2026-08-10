@@ -201,12 +201,18 @@ export function CloseComandaDialog({
                 <span>{formatCentsToBRL(remainingCents)}</span>
               </div>
             )}
-            {totalChangeCents > 0 && (
-              <div className="flex justify-between text-xs font-bold text-emerald-700 pt-1 border-t border-[var(--border)]">
-                <span>Troco a Devolver:</span>
-                <span>{formatCentsToBRL(totalChangeCents)}</span>
-              </div>
-            )}
+            {/* Troco sempre visível para agilizar a conferência do atendente
+                (mostra R$ 0,00 quando não há troco). */}
+            <div className="flex justify-between items-baseline pt-1.5 mt-0.5 border-t border-[var(--border)]">
+              <span className="text-sm font-bold text-[var(--text-2)]">Troco a Devolver:</span>
+              <span
+                className={`text-base font-extrabold tabular-nums ${
+                  totalChangeCents > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
+                }`}
+              >
+                {formatCentsToBRL(totalChangeCents)}
+              </span>
+            </div>
           </div>
 
           {errorMessage && (

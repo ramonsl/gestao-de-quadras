@@ -73,8 +73,8 @@ export function CloseComandaDialog({
   }
 
   const { totalAllocatedCents, totalChangeCents, isValid } = useMemo(() => {
-    let allocated = 0; // Σ valor cobrado (base do "falta alocar")
-    let moneyIn = 0; // dinheiro efetivamente na mão: em dinheiro usa o recebido; demais, o cobrado
+    let allocated = 0;
+    let change = 0; // troco só existe em espécie (dinheiro): recebido − cobrado por linha
     let valid = true;
 
     for (const p of payments) {
@@ -84,17 +84,15 @@ export function CloseComandaDialog({
 
       if (p.method === "dinheiro") {
         const rec = p.receivedStr ? parseCents(p.receivedStr) : amt;
-        if (rec < amt) valid = false; // recebeu menos que o cobrado nesta forma
-        moneyIn += rec;
-      } else {
-        moneyIn += amt;
+        if (rec < amt) {
+          valid = false;
+        } else {
+          change += rec - amt;
+        }
       }
     }
 
     if (allocated < totalCents) valid = false;
-
-    // Troco = tudo que entrou menos o total da comanda (qualquer excesso, não só dinheiro).
-    const change = Math.max(0, moneyIn - totalCents);
 
     return {
       totalAllocatedCents: allocated,

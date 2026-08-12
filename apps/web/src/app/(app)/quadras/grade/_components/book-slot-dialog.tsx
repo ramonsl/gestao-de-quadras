@@ -9,6 +9,7 @@ import { CustomerSearchCombobox } from "../../../pdv/_components/customer-search
 import type { CustomerSearchResult } from "../../../pdv/_actions/search-customers.action";
 import { createBookingAction } from "../_actions/create-booking.action";
 import { addBookingToComandaAction } from "../_actions/add-booking-to-comanda.action";
+import { splitBookingAction } from "../_actions/split-booking.action";
 
 export interface ComandaOption {
   id: string;
@@ -24,7 +25,7 @@ interface SlotInfo {
   priceInCents: number;
 }
 
-type Mode = "new" | "existing";
+type Mode = "new" | "existing" | "split";
 
 export function BookSlotDialog({
   open,
@@ -43,8 +44,17 @@ export function BookSlotDialog({
   const [mode, setMode] = useState<Mode>("new");
   const [customer, setCustomer] = useState<CustomerSearchResult | null>(null);
   const [comandaId, setComandaId] = useState<string>(comandaOptions[0]?.id ?? "");
+  const [selectedSplitComandaIds, setSelectedSplitComandaIds] = useState<string[]>(
+    comandaOptions.slice(0, 2).map((c) => c.id)
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const toggleSplitComanda = (id: string) => {
+    setSelectedSplitComandaIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
   async function handleConfirm() {
     if (isSubmitting) return;
@@ -52,10 +62,15 @@ export function BookSlotDialog({
     setErrorMessage(null);
 
     const base = { courtId: slot.courtId, date, startTimeHHMM: slot.startTimeHHMM };
-    const result =
-      mode === "new"
-        ? await createBookingAction({ ...base, customerId: customer?.id ?? null })
-        : await addBookingToComandaAction({ ...base, comandaId });
+
+    let result: { success: boolean; error?: string };
+    if (mode === "new") {
+      result = await createBookingAction({ ...base, customerId: customer?.id ?? null });
+    } else if (mode === "existing") {
+      result = await addBookingToComandaAction({ ...base, comandaId });
+    } else {
+      result = await splitBookingAction({ ...base, comandaIds: selectedSplitComandaIds });
+    }
 
     if (!result.success) {
       setErrorMessage(result.error ?? "Não foi possível marcar a locação.");
@@ -67,7 +82,15 @@ export function BookSlotDialog({
     onOpenChange(false);
   }
 
-  const canConfirm = mode === "new" ? true : comandaId !== "";
+  const canConfirm =
+    mode === "new"
+      ? true
+      : mode === "existing"
+      ? comandaId !== ""
+      : selectedSplitComandaIds.length >= 2;
+
+  const splitCount = selectedSplitComandaIds.length;
+  const shareCents = splitCount >= 2 ? Math.floor(slot.priceInCents / splitCount) : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,12 +105,12 @@ export function BookSlotDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Alternador de caminho (AC3) */}
-          <div className="grid grid-cols-2 gap-1.5">
+          {/* Alternador de caminho (AC3 + Rateio) */}
+          <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
               onClick={() => setMode("new")}
-              className={`py-2 px-2 text-xs font-semibold rounded border transition-all ${
+              className={`py-2 px-1 text-[11px] font-semibold rounded border transition-all ${
                 mode === "new"
                   ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
                   : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
@@ -99,13 +122,26 @@ export function BookSlotDialog({
               type="button"
               onClick={() => setMode("existing")}
               disabled={comandaOptions.length === 0}
-              className={`py-2 px-2 text-xs font-semibold rounded border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              className={`py-2 px-1 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                 mode === "existing"
                   ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
                   : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
               }`}
             >
               Comanda existente
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("split")}
+              disabled={comandaOptions.length < 2}
+              title={comandaOptions.length < 2 ? "Exige pelo menos 2 comandas abertas" : "Dividir entre 2+ comandas"}
+              className={`py-2 px-1 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                mode === "split"
+                  ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                  : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
+              }`}
+            >
+              Ratear comandas
             </button>
           </div>
 
@@ -122,7 +158,7 @@ export function BookSlotDialog({
             </div>
           )}
 
-          {mode === "new" ? (
+          {mode === "new" && (
             <div className="space-y-2">
               <label className="text-xs font-bold text-[var(--text-2)] block">
                 Cliente (opcional)
@@ -152,7 +188,9 @@ export function BookSlotDialog({
                 />
               )}
             </div>
-          ) : (
+          )}
+
+          {mode === "existing" && (
             <div className="space-y-2">
               <label className="text-xs font-bold text-[var(--text-2)] block">
                 Comanda aberta
@@ -168,6 +206,63 @@ export function BookSlotDialog({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {mode === "split" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[var(--text-2)] block">
+                  Selecione as comandas participantes (mínimo 2)
+                </label>
+                <span className="text-[11px] font-semibold text-[var(--accent)]">
+                  {splitCount} selecionada(s)
+                </span>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto space-y-1.5 border border-[var(--border)] p-2 rounded-[var(--radius-control)] bg-[var(--bg-sunken)]">
+                {comandaOptions.map((c) => {
+                  const checked = selectedSplitComandaIds.includes(c.id);
+                  return (
+                    <label
+                      key={c.id}
+                      className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-colors text-xs select-none ${
+                        checked
+                          ? "bg-white border-[var(--accent)] text-[var(--text-1)] shadow-2xs"
+                          : "bg-white/60 border-[var(--border-soft)] text-[var(--text-2)] hover:border-[var(--border)]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleSplitComanda(c.id)}
+                          className="rounded text-[var(--accent)] focus:ring-[var(--accent)]"
+                        />
+                        <span className="font-semibold">{c.label}</span>
+                      </div>
+                      <span className="text-[11px] text-[var(--text-3)]">
+                        {formatCentsToBRL(c.totalCents)}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {splitCount >= 2 ? (
+                <div className="p-2.5 rounded bg-[var(--accent-tint-soft)] border border-[var(--accent-tint)] text-xs text-[var(--text-1)] flex items-center justify-between">
+                  <span>
+                    Divisão de {formatCentsToBRL(slot.priceInCents)} entre {splitCount} comandas:
+                  </span>
+                  <span className="font-bold text-[var(--accent-hover)]">
+                    {formatCentsToBRL(shareCents)} / comanda
+                  </span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--danger)]">
+                  Selecione pelo menos 2 comandas para realizar o rateio.
+                </p>
+              )}
             </div>
           )}
 

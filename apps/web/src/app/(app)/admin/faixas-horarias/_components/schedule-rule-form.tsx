@@ -206,6 +206,7 @@ export function ScheduleRuleForm({ courts }: Props) {
   const [opening, setOpening] = React.useState("08:00");
   const [closing, setClosing] = React.useState("22:00");
   const [price, setPrice] = React.useState("35.00");
+  const [monthlyPrice, setMonthlyPrice] = React.useState("");
 
   const [formState, submitAction, isPending] = useActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
@@ -382,7 +383,7 @@ export function ScheduleRuleForm({ courts }: Props) {
             </div>
             <div>
               <label htmlFor="pricePerSlot" className={LABEL_CLS}>
-                Valor / 30 min (R$) *
+                Valor Avulso / 30 min (R$) *
               </label>
               <input
                 type="number"
@@ -400,6 +401,32 @@ export function ScheduleRuleForm({ courts }: Props) {
                 1h = 2 blocos · 1h30 = 3 blocos
               </p>
             </div>
+          </div>
+
+          {/* Tarifa Mensalista */}
+          <div>
+            <label htmlFor="monthlyPricePerSlot" className={LABEL_CLS}>
+              Tarifa Mensalista / 30 min (R$)
+              <span className="ml-2 text-[10px] font-normal text-[var(--text-3)] normal-case tracking-normal">
+                Opcional — valor reduzido para contratos mensais (CAD-09)
+              </span>
+            </label>
+            <input
+              type="number"
+              id="monthlyPricePerSlot"
+              name="monthlyPricePerSlot"
+              step="0.01"
+              min="0.01"
+              value={monthlyPrice}
+              onChange={(e) => setMonthlyPrice(e.target.value)}
+              placeholder="25,00 (opcional)"
+              className={INPUT_CLS}
+            />
+            {monthlyPrice && parseFloat(monthlyPrice) > 0 && (
+              <p className="mt-1 text-[11px] text-[var(--accent)]">
+                Mensalista 1h = {((parseFloat(monthlyPrice) || 0) * 2).toFixed(2).replace(".", ",")} · 1h30 = {((parseFloat(monthlyPrice) || 0) * 3).toFixed(2).replace(".", ",")}
+              </p>
+            )}
           </div>
         </div>
 

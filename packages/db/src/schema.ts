@@ -457,6 +457,8 @@ export const courtTimeSlots = pgTable(
     endTimeHHMM: varchar("end_time_hhmm", { length: 5 }).notNull(),
     durationMinutes: integer("duration_minutes").notNull(),
     priceInCents: integer("price_in_cents").notNull(),
+    /** Tarifa diferenciada para mensalistas (CAD-09). Opcional — se nulo, usa priceInCents. */
+    monthlyPriceInCents: integer("monthly_price_in_cents"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -537,6 +539,31 @@ export const courtBookings = pgTable(
       .where(sql`status <> 'cancelled'`),
     tenantDateIdx: index("court_bookings_tenant_date_idx").on(t.tenantId, t.bookingDate),
     tenantComandaIdx: index("court_bookings_tenant_comanda_idx").on(t.tenantId, t.comandaId),
+  })
+);
+
+/**
+ * PDV-05 — Rateio de Locação entre Múltiplas Comandas.
+ *
+ * Quando uma locação é dividida entre N jogadores/comandas, cada parcela
+ * é registrada aqui. A court_booking principal continua única (anti-double-booking).
+ * share_cents representa o valor desta parcela lançado na comanda correspondente.
+ */
+export const courtBookingSplits = pgTable(
+  "court_booking_splits",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    courtBookingId: uuid("court_booking_id").notNull(),
+    comandaId: uuid("comanda_id").references(() => comandas.id, { onDelete: "set null" }),
+    /** Sem FK intencional — preservação LGPD. */
+    customerId: uuid("customer_id"),
+    shareCents: integer("share_cents").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    bookingIdx: index("court_booking_splits_booking_idx").on(t.tenantId, t.courtBookingId),
+    comandaIdx: index("court_booking_splits_comanda_idx").on(t.tenantId, t.comandaId),
   })
 );
 
@@ -798,6 +825,8 @@ export type CourtTimeSlot = typeof courtTimeSlots.$inferSelect;
 export type NewCourtTimeSlot = typeof courtTimeSlots.$inferInsert;
 export type CourtBooking = typeof courtBookings.$inferSelect;
 export type NewCourtBooking = typeof courtBookings.$inferInsert;
+export type CourtBookingSplit = typeof courtBookingSplits.$inferSelect;
+export type NewCourtBookingSplit = typeof courtBookingSplits.$inferInsert;
 export type ClassPackage = typeof classPackages.$inferSelect;
 export type NewClassPackage = typeof classPackages.$inferInsert;
 export type StudentClassBalance = typeof studentClassBalance.$inferSelect;

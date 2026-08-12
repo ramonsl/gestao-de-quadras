@@ -14,6 +14,8 @@ export interface CreateCourtTimeSlotInput {
   endTimeHHMM: string;
   durationMinutes: number;
   priceInCents: number;
+  /** Tarifa mensalista opcional. Se omitido, usa priceInCents. */
+  monthlyPriceInCents?: number | null;
 }
 
 /**
@@ -30,6 +32,8 @@ export interface CourtScheduleRuleInput {
   closingHHMM: string;
   /** Preço por fração de 30 minutos em centavos */
   pricePerSlotInCents: number;
+  /** Tarifa mensalista opcional. Se omitido, usa priceInCents para mensalistas. */
+  monthlyPriceInCents?: number | null;
 }
 
 export interface GeneratedSlot {
@@ -37,6 +41,7 @@ export interface GeneratedSlot {
   endTimeHHMM: string;
   durationMinutes: 30;
   priceInCents: number;
+  monthlyPriceInCents?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,11 +57,12 @@ type CourtTimeSlotRow = {
   end_time_hhmm: string;
   duration_minutes: number;
   price_in_cents: number;
+  monthly_price_in_cents: number | null;
   created_at: Date;
   updated_at: Date;
 };
 
-const COLS = sql`id, tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents, created_at, updated_at`;
+const COLS = sql`id, tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents, monthly_price_in_cents, created_at, updated_at`;
 
 function toTimeSlot(row: CourtTimeSlotRow): CourtTimeSlot {
   return {
@@ -68,6 +74,7 @@ function toTimeSlot(row: CourtTimeSlotRow): CourtTimeSlot {
     endTimeHHMM: row.end_time_hhmm,
     durationMinutes: row.duration_minutes,
     priceInCents: row.price_in_cents,
+    monthlyPriceInCents: row.monthly_price_in_cents,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -86,7 +93,8 @@ function toTimeSlot(row: CourtTimeSlotRow): CourtTimeSlot {
 export function generateSlotsFromRule(
   openingHHMM: string,
   closingHHMM: string,
-  pricePerSlotInCents: number
+  pricePerSlotInCents: number,
+  monthlyPriceInCents?: number | null
 ): GeneratedSlot[] {
   const toMinutes = (hhmm: string): number => {
     const [h, m] = hhmm.split(":").map(Number);
@@ -120,6 +128,7 @@ export function generateSlotsFromRule(
       endTimeHHMM: toHHMM(cursor + 30),
       durationMinutes: 30,
       priceInCents: pricePerSlotInCents,
+      monthlyPriceInCents: monthlyPriceInCents ?? null,
     });
     cursor += 30;
   }
@@ -152,9 +161,9 @@ export async function createCourtTimeSlot(
   await assertCourtInTenant(ctx, input.courtId);
   const result = await ctx.db.execute<CourtTimeSlotRow>(
     sql`INSERT INTO court_time_slots
-          (tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents)
+          (tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents, monthly_price_in_cents)
         VALUES (${ctx.tenantId}, ${input.courtId}, ${input.dayOfWeek}, ${input.startTimeHHMM},
-                ${input.endTimeHHMM}, ${input.durationMinutes}, ${input.priceInCents})
+                ${input.endTimeHHMM}, ${input.durationMinutes}, ${input.priceInCents}, ${input.monthlyPriceInCents ?? null})
         RETURNING ${COLS}`
   );
   return toTimeSlot(rows<CourtTimeSlotRow>(result)[0]);
@@ -223,9 +232,9 @@ export async function upsertCourtScheduleRule(
     for (const slot of generatedSlots) {
       await ctx.db.execute(
         sql`INSERT INTO court_time_slots
-              (tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents)
+              (tenant_id, court_id, day_of_week, start_time_hhmm, end_time_hhmm, duration_minutes, price_in_cents, monthly_price_in_cents)
             VALUES (${ctx.tenantId}, ${input.courtId}, ${day}, ${slot.startTimeHHMM},
-                    ${slot.endTimeHHMM}, ${slot.durationMinutes}, ${slot.priceInCents})`
+                    ${slot.endTimeHHMM}, ${slot.durationMinutes}, ${slot.priceInCents}, ${input.monthlyPriceInCents ?? null})`
       );
       slotsCreated++;
     }

@@ -50,12 +50,14 @@ describe("generateSlotsFromRule", () => {
       endTimeHHMM: "08:30",
       durationMinutes: 30,
       priceInCents: 3500,
+      monthlyPriceInCents: null,
     });
     expect(slots[1]).toEqual({
       startTimeHHMM: "08:30",
       endTimeHHMM: "09:00",
       durationMinutes: 30,
       priceInCents: 3500,
+      monthlyPriceInCents: null,
     });
   });
 

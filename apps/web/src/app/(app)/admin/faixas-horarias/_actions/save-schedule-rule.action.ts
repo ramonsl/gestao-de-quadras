@@ -25,6 +25,11 @@ const SaveScheduleRuleSchema = z
     pricePerSlot: z.coerce
       .number()
       .positive("Preço deve ser maior que 0"),
+    /** Tarifa mensalista opcional em reais (ex: 25.00). */
+    monthlyPricePerSlot: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : v),
+      z.coerce.number().positive("Tarifa mensalista deve ser maior que 0").optional()
+    ),
   })
   .refine(
     (data) => {
@@ -63,6 +68,7 @@ export async function saveScheduleRuleAction(
     openingHHMM: formData.get("openingHHMM"),
     closingHHMM: formData.get("closingHHMM"),
     pricePerSlot: formData.get("pricePerSlot"),
+    monthlyPricePerSlot: formData.get("monthlyPricePerSlot"),
   });
 
   if (!parsed.success) {
@@ -91,6 +97,9 @@ export async function saveScheduleRuleAction(
       openingHHMM: parsed.data.openingHHMM,
       closingHHMM: parsed.data.closingHHMM,
       pricePerSlotInCents: Math.round(parsed.data.pricePerSlot * 100),
+      monthlyPriceInCents: parsed.data.monthlyPricePerSlot
+        ? Math.round(parsed.data.monthlyPricePerSlot * 100)
+        : null,
     });
     return { success: true, slotsCreated: result.slotsCreated };
   } catch (err) {

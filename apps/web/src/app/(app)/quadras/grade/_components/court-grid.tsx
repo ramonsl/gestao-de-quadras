@@ -80,6 +80,7 @@ export function CourtGrid({
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-3)]">
         <LegendDot className="border-[var(--border)] bg-white" label="Livre" />
         <LegendDot className="border-[var(--accent)] bg-[var(--accent-tint)]" label="Ocupado" />
+        <LegendDot className="border-purple-300 bg-purple-50" label="Rateio (Múltiplas comandas)" />
         <LegendDot className="border-[var(--warning)]" label="Reservado (reserva online — em breve)" />
       </div>
 
@@ -143,7 +144,43 @@ function SlotCell({
     );
   }
 
-  // booked (Ocupado)
+  // Rateio entre múltiplas comandas (PDV-05)
+  if (cell.splitParticipants && cell.splitParticipants.length > 0) {
+    const names = cell.splitParticipants
+      .map((p) => p.customerName ?? "Balcão")
+      .join(" | ");
+
+    const firstComandaId = cell.splitParticipants.find((p) => p.comandaId)?.comandaId;
+
+    const inner = (
+      <div
+        className="w-full h-12 px-2 rounded-[var(--radius-control)] border border-purple-300 bg-purple-50 flex flex-col justify-center"
+        title={`Rateio entre: ${names}`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">
+            Rateio ({cell.splitParticipants.length})
+          </span>
+          <span className="text-[9px] font-semibold text-purple-600">
+            {formatCentsToBRL(cell.priceInCents)}
+          </span>
+        </div>
+        <span className="text-[11px] font-medium text-purple-900 truncate">
+          {names}
+        </span>
+      </div>
+    );
+
+    return firstComandaId ? (
+      <Link href={`/pdv/${firstComandaId}`} aria-label={`Abrir comanda de ${courtName} às ${cell.startTimeHHMM}`}>
+        {inner}
+      </Link>
+    ) : (
+      inner
+    );
+  }
+
+  // booked (Ocupado simples)
   const inner = (
     <div className="w-full h-12 px-2 rounded-[var(--radius-control)] border border-[var(--accent)] bg-[var(--accent-tint)] flex flex-col justify-center">
       <span className="text-[11px] font-semibold text-[var(--accent-hover)]">Ocupado</span>

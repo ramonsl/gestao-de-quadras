@@ -57,6 +57,12 @@ async function writeAudit(
 
 export type CourtSlotStatus = "free" | "booked" | "reserved";
 
+export interface CourtBookingSplitParticipant {
+  comandaId: string | null;
+  customerName: string | null;
+  shareCents: number;
+}
+
 export interface CourtGridSlotCell {
   courtId: string;
   startTimeHHMM: string;
@@ -66,6 +72,8 @@ export interface CourtGridSlotCell {
   bookingId: string | null;
   comandaId: string | null;
   customerName: string | null;
+  /** Participantes quando a locação foi rateada entre múltiplas comandas. */
+  splitParticipants: CourtBookingSplitParticipant[];
 }
 
 export interface CourtGridColumn {
@@ -102,6 +110,13 @@ type BookingRow = {
   customer_name: string | null;
 };
 
+type SplitRow = {
+  court_booking_id: string;
+  comanda_id: string | null;
+  customer_name: string | null;
+  share_cents: number;
+};
+
 /**
  * Monta a grade (quadras × horários) de uma data: colunas = quadras ativas,
  * linhas = horários configurados (união dos `start_time_hhmm` do dia da semana),
@@ -115,7 +130,7 @@ export async function getCourtGridForDate(
   const { date } = GetCourtGridInputSchema.parse(input);
   const dow = dayOfWeekOf(date);
 
-  const [courtsResult, slotsResult, bookingsResult] = await Promise.all([
+  const [courtsResult, slotsResult, bookingsResult, splitsResult] = await Promise.all([
     ctx.db.execute<CourtRow>(
       sql`SELECT id, name FROM courts
           WHERE tenant_id = ${ctx.tenantId} AND is_active = true
@@ -135,18 +150,36 @@ export async function getCourtGridForDate(
             AND cb.booking_date = ${date}
             AND cb.status <> 'cancelled'`
     ),
+    ctx.db.execute<SplitRow>(
+      sql`SELECT cbs.court_booking_id, cbs.comanda_id, c.name AS customer_name, cbs.share_cents
+          FROM court_booking_splits cbs
+          LEFT JOIN customers c ON c.id = cbs.customer_id AND c.tenant_id = cbs.tenant_id
+          WHERE cbs.tenant_id = ${ctx.tenantId}
+            AND cbs.court_booking_id IN (
+              SELECT id FROM court_bookings
+              WHERE tenant_id = ${ctx.tenantId}
+                AND booking_date = ${date}
+                AND status <> 'cancelled'
+            )`
+    ),
   ]);
 
   const courts = rows<CourtRow>(courtsResult).map((c) => ({ courtId: c.id, courtName: c.name }));
   const slots = rows<SlotRow>(slotsResult);
   const bookings = rows<BookingRow>(bookingsResult);
+  const splits = rows<SplitRow>(splitsResult);
+
+  const splitsByBookingId = new Map<string, CourtBookingSplitParticipant[]>();
+  for (const s of splits) {
+    const arr = splitsByBookingId.get(s.court_booking_id) ?? [];
+    arr.push({ comandaId: s.comanda_id, customerName: s.customer_name, shareCents: s.share_cents });
+    splitsByBookingId.set(s.court_booking_id, arr);
+  }
 
   const key = (courtId: string, start: string) => `${courtId}|${start}`;
   const bookingByKey = new Map<string, BookingRow>();
   for (const b of bookings) bookingByKey.set(key(b.court_id, b.start_time_hhmm), b);
 
-  // Uma célula por (quadra, horário) existente — a partir das faixas configuradas
-  // e também de qualquer marcação cujo horário não exista mais na configuração.
   const cellByKey = new Map<string, CourtGridSlotCell>();
   const rowSet = new Set<string>();
 
@@ -162,6 +195,7 @@ export async function getCourtGridForDate(
       bookingId: b?.id ?? null,
       comandaId: b?.comanda_id ?? null,
       customerName: b?.customer_name ?? null,
+      splitParticipants: b ? (splitsByBookingId.get(b.id) ?? []) : [],
     });
     rowSet.add(s.start_time_hhmm);
   }
@@ -179,6 +213,7 @@ export async function getCourtGridForDate(
       bookingId: b.id,
       comandaId: b.comanda_id,
       customerName: b.customer_name,
+      splitParticipants: splitsByBookingId.get(b.id) ?? [],
     });
     rowSet.add(b.start_time_hhmm);
   }
@@ -413,3 +448,130 @@ export async function addCourtBookingToExistingComanda(
 
   return { success: true, bookingId };
 }
+
+// --- Rateio de locação entre múltiplas comandas (PDV-05 AC3 — split) ---------
+
+export const SplitCourtBookingInputSchema = z.object({
+  courtId: z.string().uuid(),
+  date: z.string().regex(DATE_REGEX),
+  startTimeHHMM: z.string().regex(HHMM_REGEX),
+  /** IDs das comandas que participam do rateio (mínimo 2). */
+  comandaIds: z.array(z.string().uuid()).min(2, "Informe ao menos 2 comandas para rateio."),
+});
+
+export type SplitCourtBookingResult =
+  | { success: true; bookingId: string; splitIds: string[] }
+  | {
+      success: false;
+      reason:
+        | "court_not_found"
+        | "slot_not_found"
+        | "past_date"
+        | "double_booked"
+        | "comanda_not_found"
+        | "comanda_closed";
+      invalidComandaId?: string;
+    };
+
+/**
+ * PDV-05 — Rateio entre múltiplas comandas (Divisão de Conta).
+ *
+ * Cria 1 `court_booking` (ocupa a grade — guarda anti-double-booking) e divide
+ * o valor total igualmente entre N comandas abertas, inserindo:
+ *  - 1 registro em `court_booking_splits` por comanda
+ *  - 1 linha `court_rental` na comanda correspondente com o valor fracionado
+ *
+ * O campo `court_bookings.comanda_id` fica NULL para indicar rateio (use splits).
+ */
+export async function splitCourtBookingAcrossComandas(
+  ctx: TenantContext,
+  input: z.infer<typeof SplitCourtBookingInputSchema>,
+  now: Date = new Date()
+): Promise<SplitCourtBookingResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("splitCourtBookingAcrossComandas exige ctx.actorUserId.");
+  }
+  const data = SplitCourtBookingInputSchema.parse(input);
+
+  const court = await getCourtById(ctx, data.courtId);
+  if (!court) return { success: false, reason: "court_not_found" };
+  if (data.date < todayLocalStr(now)) return { success: false, reason: "past_date" };
+
+  const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
+  if (!slot) return { success: false, reason: "slot_not_found" };
+
+  // Valida todas as comandas antes de inserir qualquer coisa.
+  type ComandaInfo = { id: string; customerId: string | null };
+  const comandaInfos: ComandaInfo[] = [];
+  for (const comandaId of data.comandaIds) {
+    const res = await ctx.db.execute<{ status: string; customer_id: string | null }>(
+      sql`SELECT status, customer_id FROM comandas
+          WHERE id = ${comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+    );
+    const comanda = rows<{ status: string; customer_id: string | null }>(res)[0];
+    if (!comanda) return { success: false, reason: "comanda_not_found", invalidComandaId: comandaId };
+    if (comanda.status !== "open") return { success: false, reason: "comanda_closed", invalidComandaId: comandaId };
+    comandaInfos.push({ id: comandaId, customerId: comanda.customer_id });
+  }
+
+  // Insere a marcação na grade (comanda_id = NULL → indica rateio via splits).
+  let bookingId: string;
+  try {
+    const bookingResult = await ctx.db.execute<{ id: string }>(
+      sql`INSERT INTO court_bookings
+            (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+          VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
+                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, NULL, ${ctx.actorUserId})
+          RETURNING id`
+    );
+    bookingId = rows<{ id: string }>(bookingResult)[0].id;
+  } catch (err) {
+    if (isUniqueViolation(err)) return { success: false, reason: "double_booked" };
+    throw err;
+  }
+
+  // Divide o valor igualmente entre as N comandas.
+  const n = data.comandaIds.length;
+  const baseShare = Math.floor(slot.priceInCents / n);
+  const remainder = slot.priceInCents - baseShare * n;
+
+  const splitIds: string[] = [];
+  for (let i = 0; i < comandaInfos.length; i++) {
+    const comanda = comandaInfos[i];
+    // A primeira comanda absorve o centavo residual da divisão inteira.
+    const shareCents = i === 0 ? baseShare + remainder : baseShare;
+
+    const splitResult = await ctx.db.execute<{ id: string }>(
+      sql`INSERT INTO court_booking_splits
+            (tenant_id, court_booking_id, comanda_id, customer_id, share_cents)
+          VALUES (${ctx.tenantId}, ${bookingId}, ${comanda.id}, ${comanda.customerId}, ${shareCents})
+          RETURNING id`
+    );
+    splitIds.push(rows<{ id: string }>(splitResult)[0].id);
+
+    // Insere linha de comanda com o valor fracionado.
+    await insertRentalLine(ctx, {
+      comandaId: comanda.id,
+      bookingId,
+      courtName: court.name,
+      startTimeHHMM: data.startTimeHHMM,
+      endTimeHHMM: slot.endTimeHHMM,
+      priceInCents: shareCents,
+    });
+  }
+
+  await writeAudit(ctx, "pdv.court_booking.split", {
+    bookingId,
+    splitIds,
+    courtId: data.courtId,
+    date: data.date,
+    startTimeHHMM: data.startTimeHHMM,
+    totalCents: slot.priceInCents,
+    participantCount: n,
+  });
+
+  return { success: true, bookingId, splitIds };
+}
+

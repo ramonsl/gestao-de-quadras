@@ -120,15 +120,17 @@ Como operador de caixa, quero transferir uma comanda não paga para a conta do c
 
 ---
 
-## PDV-05 [P0] — Grade Visual de Locação de Quadras
+## PDV-05 [P0] — Grade Visual de Locação de Quadras e Rateio de Comandas
 **Descrição:**
-Como operador de caixa, quero uma tela de locação de quadras em formato de grade (quadras × horários), para marcar horários e lançar locações na comanda de forma rápida.
+Como operador de caixa, quero uma tela de locação de quadras em formato de grade (quadras × blocos de 30 min), para agendar locações e optar por lançar o valor integral na comanda do responsável ou rateá-lo entre as comandas dos jogadores.
 
 **Critérios de Aceite:**
-*   A tela do PDV deve exibir uma grade de agendamentos contendo as quadras nas colunas e os horários da grade nas linhas, permitindo navegar entre datas (dia atual e dias futuros).
-*   A grade deve diferenciar claramente os horários por cores/status: Livre, Ocupado (comanda vinculada), Reservado (reserva online pendente de pagamento/confirmação).
-*   Ao clicar em um horário livre, o caixa pode criar instantaneamente uma nova comanda vinculada à locação da quadra ou adicionar a locação a uma comanda existente.
-*   O sistema deve impedir de forma rígida a dupla marcação (duplicidade) do mesmo horário e quadra na grade.
+*   **Grade por Slots de 30 Minutos:** A tela do PDV exibe a grade de agendamentos contendo as quadras nas colunas e as frações de 30 minutos nas linhas, permitindo selecionar 1 ou múltiplos blocos consecutivos (ex.: 2 blocos = 1h, 3 blocos = 1h30).
+*   **Identificação de Status:** Diferenciar claramente os horários por cores/status: Livre, Ocupado (comanda vinculada) e Reservado Online (sinal pago/pendente).
+*   **Lançamento Integral ou Rateado em Comandas:** Ao confirmar a locação da quadra:
+    *   *Lançamento Integral:* O valor total (calculado pela soma das frações de 30 min) é inserido na comanda de um único cliente responsável.
+    *   *Rateio entre Comandas (Divisão de Conta):* O operador de caixa pode selecionar 2 ou mais comandas abertas (ou selecionar múltiplos clientes) e dividir o valor total da locação igualmente (ou de forma proporcional) entre elas (ex.: quadra de R$ 140,00 dividida em 4 comandas = R$ 35,00 para cada comanda).
+*   **Bloqueio de Duplicidade:** O sistema impede de forma rígida a dupla marcação (duplicidade) do mesmo horário e quadra na grade.
 
 ---
 

@@ -54,14 +54,17 @@ Como administrador, quero importar clientes em lote a partir de uma planilha (CS
 
 ---
 
-## CAD-05 [P0] — Cadastro da Grade de Horários da Quadra
+## CAD-05 [P0] — Cadastro da Grade de Horários e Precificação da Quadra
 **Descrição:**
-Como administrador, quero cadastrar a grade de horários disponíveis de cada quadra, para abrir a agenda para locações e reservas.
+Como administrador da arena, quero cadastrar o horário de funcionamento do clube (abertura e fechamento), a divisão de slots em blocos de 30 minutos e precificar essas frações com seleção rápida de múltiplos dias da semana, para abrir a agenda para locações e reservas de forma ágil e prática.
 
 **Critérios de Aceite:**
-*   Permitir configurar, para cada dia da semana e quadra, as janelas de horários disponíveis (ex.: Segunda a Sexta, das 07h às 23h, em intervalos de 1h ou 1.5h) e seus respectivos valores.
-*   Permitir o bloqueio de horários ou quadras inteiras para manutenção interna, torneios ou eventos corporativos, impedindo reservas públicas nesses horários.
-*   Alterações na grade de horários devem refletir de forma instantânea tanto na visualização da grade no PDV físico quanto no widget público de reservas online (ver `RES-01`).
+*   **Seleção em Lote de Dias da Semana (UX Otimizada):** Permitir selecionar múltiplos dias da semana de uma só vez (ex.: `[x] Seg [x] Ter [x] Qua [x] Qui [x] Sex`) para aplicar a mesma regra de funcionamento e preço em massa, sem necessidade de cadastrar dia por dia.
+*   **Horário de Funcionamento e Abertura/Fechamento:** Permitir definir o horário de abertura (ex.: `08:00`) e o horário de fechamento da arena (ex.: `22:00`).
+*   **Grade Modularizada em Slots de 30 Minutos:** O sistema gera automaticamente a grade dividida em blocos fixos de 30 em 30 minutos (ex.: 08:00–08:30, 08:30–09:00, etc.).
+*   **Precificação por Fração de 30 Minutos:** A tarifa cadastrada no sistema é expressa por fração de 30 minutos (ex.: R$ 35,00 por fração no horário nobre das 18h às 22h vs. R$ 25,00 por fração no horário diurno). Uma locação de 60, 90 ou 120 minutos consome respectivamente 2, 3 ou 4 blocos e calcula o valor total acumulado.
+*   **Bloqueio de Horários/Quadras:** Permitir o bloqueio de slots individuais de 30 minutos ou da quadra inteira para manutenção, torneios ou eventos corporativos, impedindo reservas públicas e presenciais nesses blocos.
+*   **Sincronização em Tempo Real:** Alterações na grade e bloqueios refletem instantaneamente no PDV físico de caixa (`PDV-05`) e na página pública de reservas online (`RES-01`).
 
 ---
 

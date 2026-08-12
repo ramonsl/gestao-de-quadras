@@ -17,11 +17,12 @@ export interface ComandaOption {
   totalCents: number;
 }
 
-interface SlotInfo {
+export interface SelectedSlotRange {
   courtId: string;
   courtName: string;
   startTimeHHMM: string;
   endTimeHHMM: string;
+  slotCount: number;
   priceInCents: number;
 }
 
@@ -37,7 +38,7 @@ export function BookSlotDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   date: string;
-  slot: SlotInfo;
+  slot: SelectedSlotRange;
   comandaOptions: ComandaOption[];
 }) {
   const router = useRouter();
@@ -47,6 +48,7 @@ export function BookSlotDialog({
   const [selectedSplitComandaIds, setSelectedSplitComandaIds] = useState<string[]>(
     comandaOptions.slice(0, 2).map((c) => c.id)
   );
+  const [isMonthlyContract, setIsMonthlyContract] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -91,16 +93,22 @@ export function BookSlotDialog({
 
   const splitCount = selectedSplitComandaIds.length;
   const shareCents = splitCount >= 2 ? Math.floor(slot.priceInCents / splitCount) : 0;
+  const durationLabel = slot.slotCount === 1 ? "30 min" : `${(slot.slotCount * 0.5).toString().replace(".", ",")}h`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Marcar Locação</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Marcar Locação
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[var(--accent-tint-soft)] text-[var(--accent)]">
+              {durationLabel} ({slot.slotCount} blocos)
+            </span>
+          </DialogTitle>
           <DialogDescription>
             <strong className="text-[var(--text-1)]">{slot.courtName}</strong> ·{" "}
             {slot.startTimeHHMM}–{slot.endTimeHHMM} ·{" "}
-            <span className="font-semibold text-[var(--text-1)]">{formatCentsToBRL(slot.priceInCents)}</span>
+            <span className="font-bold text-[var(--text-1)]">{formatCentsToBRL(slot.priceInCents)}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -134,14 +142,14 @@ export function BookSlotDialog({
               type="button"
               onClick={() => setMode("split")}
               disabled={comandaOptions.length < 2}
-              title={comandaOptions.length < 2 ? "Exige pelo menos 2 comandas abertas" : "Dividir entre 2+ comandas"}
+              title={comandaOptions.length < 2 ? "Exige pelo menos 2 comandas abertas" : "Dividir entre N comandas"}
               className={`py-2 px-1 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                 mode === "split"
                   ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
                   : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
               }`}
             >
-              Ratear comandas
+              Ratear ({comandaOptions.length})
             </button>
           </div>
 
@@ -213,7 +221,7 @@ export function BookSlotDialog({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-[var(--text-2)] block">
-                  Selecione as comandas participantes (mínimo 2)
+                  Selecione as comandas participantes (qualquer quantidade)
                 </label>
                 <span className="text-[11px] font-semibold text-[var(--accent)]">
                   {splitCount} selecionada(s)
@@ -252,7 +260,7 @@ export function BookSlotDialog({
               {splitCount >= 2 ? (
                 <div className="p-2.5 rounded bg-[var(--accent-tint-soft)] border border-[var(--accent-tint)] text-xs text-[var(--text-1)] flex items-center justify-between">
                   <span>
-                    Divisão de {formatCentsToBRL(slot.priceInCents)} entre {splitCount} comandas:
+                    Rateio de {formatCentsToBRL(slot.priceInCents)} entre {splitCount} comandas:
                   </span>
                   <span className="font-bold text-[var(--accent-hover)]">
                     {formatCentsToBRL(shareCents)} / comanda
@@ -265,6 +273,24 @@ export function BookSlotDialog({
               )}
             </div>
           )}
+
+          {/* Opção Mensalista (CAD-09) */}
+          <div className="pt-2 border-t border-[var(--border-soft)]">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isMonthlyContract}
+                onChange={(e) => setIsMonthlyContract(e.target.checked)}
+                className="rounded text-[var(--accent)] focus:ring-[var(--accent)]"
+              />
+              <span className="text-xs font-semibold text-[var(--text-1)] flex items-center gap-1">
+                🔄 Marcação de Mensalista
+                <span className="text-[10px] font-normal text-[var(--text-3)]">
+                  (Contrato recorrente — CAD-09)
+                </span>
+              </span>
+            </label>
+          </div>
 
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

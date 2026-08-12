@@ -530,8 +530,14 @@ export async function closeComanda(
     }
   }
 
-  // Validação de pagamentos em dinheiro e cálculo de troco
+  // Cálculo de troco por meio de pagamento. Cada forma cobre parte da comanda
+  // (nunca mais que o restante); o excesso entregue vira troco — vale para
+  // qualquer meio, não só dinheiro. 'pontos' é abatimento e nunca gera troco.
+  // Grava-se `amount_cents` = valor entregue no meio; assim o líquido por meio
+  // (`amount_cents − change_cents` = parcela que cobriu a conta) mantém a
+  // conferência de caixa correta (ver cash-session.service: netAmt = amt − change).
   let totalChangeCents = 0;
+  let remainingCents = finalTotalCents;
   const processedPayments: Array<{
     method: string;
     amountCents: number;
@@ -540,22 +546,33 @@ export async function closeComanda(
   }> = [];
 
   for (const p of data.payments) {
-    let change = 0;
-    let received: number | null = p.receivedCents ?? null;
-    if (p.paymentMethod === "dinheiro") {
-      const rec = p.receivedCents ?? p.amountCents;
-      if (rec < p.amountCents) {
-        return { success: false, reason: "invalid_cash_received" };
-      }
-      change = rec - p.amountCents;
-      received = rec;
-      totalChangeCents += change;
+    const chargeCents = Math.min(p.amountCents, Math.max(0, remainingCents));
+    remainingCents -= chargeCents;
+
+    if (p.paymentMethod === "pontos") {
+      // Pontos abatem valor: sem troco e sem "recebido".
+      processedPayments.push({
+        method: p.paymentMethod,
+        amountCents: p.amountCents,
+        receivedCents: null,
+        changeCents: 0,
+      });
+      continue;
     }
+
+    // Valor entregue pelo cliente neste meio (dinheiro: recebido; demais: o cobrado).
+    const tenderedCents = p.paymentMethod === "dinheiro" ? (p.receivedCents ?? p.amountCents) : p.amountCents;
+    if (tenderedCents < chargeCents) {
+      return { success: false, reason: "invalid_cash_received" };
+    }
+    const changeCents = tenderedCents - chargeCents;
+    totalChangeCents += changeCents;
+
     processedPayments.push({
       method: p.paymentMethod,
-      amountCents: p.amountCents,
-      receivedCents: received,
-      changeCents: change,
+      amountCents: tenderedCents,
+      receivedCents: changeCents > 0 || p.paymentMethod === "dinheiro" ? tenderedCents : null,
+      changeCents,
     });
   }
 

@@ -569,7 +569,7 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole }
                         {PAYMENT_LABELS[p.paymentMethod] ?? p.paymentMethod}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-[var(--text-1)]">
-                        {formatCentsToBRL(p.amountCents)}
+                        {formatCentsToBRL(p.amountCents - p.changeCents)}
                       </td>
                       <td className="px-4 py-3 text-right text-[var(--text-2)]">
                         {p.receivedCents ? formatCentsToBRL(p.receivedCents) : "—"}

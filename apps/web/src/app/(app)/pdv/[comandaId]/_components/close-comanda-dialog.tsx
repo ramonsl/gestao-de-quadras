@@ -72,32 +72,37 @@ export function CloseComandaDialog({
     return Math.round(num * 100);
   }
 
-  const { totalAllocatedCents, totalChangeCents, isValid } = useMemo(() => {
-    let allocated = 0;
-    let change = 0;
+  const { totalAllocatedCents, totalChangeCents, isValid, changeByRow } = useMemo(() => {
+    let allocated = 0; // Σ valor a cobrar (define "falta alocar")
+    let remaining = totalCents; // saldo da comanda ainda não coberto
+    let totalChange = 0;
     let valid = true;
+    const changeByRow: Record<string, number> = {};
 
     for (const p of payments) {
       const amt = parseCents(p.amountStr);
       if (amt <= 0) valid = false;
       allocated += amt;
 
-      if (p.method === "dinheiro") {
-        const rec = p.receivedStr ? parseCents(p.receivedStr) : amt;
-        if (rec < amt) {
-          valid = false;
-        } else {
-          change += rec - amt;
-        }
-      }
+      // Parcela desta forma que efetivamente cobre a comanda (nunca mais que o restante).
+      const charge = Math.min(amt, Math.max(0, remaining));
+      remaining -= charge;
+
+      // Valor entregue pelo cliente neste meio (dinheiro: recebido; demais: o cobrado).
+      const tendered = p.method === "dinheiro" ? (p.receivedStr ? parseCents(p.receivedStr) : amt) : amt;
+      // Troco = o que sobrou do que cobre a conta (qualquer excesso, em qualquer meio).
+      const change = Math.max(0, tendered - charge);
+      changeByRow[p.id] = change;
+      totalChange += change;
     }
 
     if (allocated < totalCents) valid = false;
 
     return {
       totalAllocatedCents: allocated,
-      totalChangeCents: change,
+      totalChangeCents: totalChange,
       isValid: valid && payments.length > 0,
+      changeByRow,
     };
   }, [payments, totalCents]);
 
@@ -201,12 +206,18 @@ export function CloseComandaDialog({
                 <span>{formatCentsToBRL(remainingCents)}</span>
               </div>
             )}
-            {totalChangeCents > 0 && (
-              <div className="flex justify-between text-xs font-bold text-emerald-700 pt-1 border-t border-[var(--border)]">
-                <span>Troco a Devolver:</span>
-                <span>{formatCentsToBRL(totalChangeCents)}</span>
-              </div>
-            )}
+            {/* Troco sempre visível para agilizar a conferência do atendente
+                (mostra R$ 0,00 quando não há troco). */}
+            <div className="flex justify-between items-baseline pt-1.5 mt-0.5 border-t border-[var(--border)]">
+              <span className="text-sm font-bold text-[var(--text-2)]">Troco a Devolver:</span>
+              <span
+                className={`text-base font-extrabold tabular-nums ${
+                  totalChangeCents > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
+                }`}
+              >
+                {formatCentsToBRL(totalChangeCents)}
+              </span>
+            </div>
           </div>
 
           {errorMessage && (
@@ -268,36 +279,41 @@ export function CloseComandaDialog({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-[var(--text-3)] block mb-0.5">Meio</label>
-                    <select
-                      value={row.method}
-                      onChange={(e) =>
-                        handleUpdatePaymentRow(row.id, "method", e.target.value as PaymentMethod)
-                      }
-                      className="w-full h-9 px-2 bg-white border border-[var(--border)] rounded text-xs outline-none focus:border-[var(--accent)]"
-                    >
-                      {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => (
-                        <option key={m} value={m}>
+                {/* Meio de pagamento — botões (mesmo padrão da Quitação de Saldo Devedor) */}
+                <div>
+                  <label className="text-[10px] text-[var(--text-3)] block mb-1">Meio de Pagamento</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((m) => {
+                      const active = row.method === m;
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => handleUpdatePaymentRow(row.id, "method", m)}
+                          className={`py-1.5 px-2 text-[11px] font-semibold rounded border transition-all ${
+                            active
+                              ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                              : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
+                          }`}
+                        >
                           {PAYMENT_LABELS[m]}
-                        </option>
-                      ))}
-                    </select>
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-[10px] text-[var(--text-3)] block mb-0.5">
-                      Valor a Cobrar (R$)
-                    </label>
-                    <input
-                      type="text"
-                      value={row.amountStr}
-                      onChange={(e) => handleUpdatePaymentRow(row.id, "amountStr", e.target.value)}
-                      placeholder="0,00"
-                      className="w-full h-9 px-2 bg-white border border-[var(--border)] rounded text-xs outline-none font-semibold focus:border-[var(--accent)] text-right"
-                    />
-                  </div>
+                <div>
+                  <label className="text-[10px] text-[var(--text-3)] block mb-0.5">
+                    Valor a Cobrar (R$)
+                  </label>
+                  <input
+                    type="text"
+                    value={row.amountStr}
+                    onChange={(e) => handleUpdatePaymentRow(row.id, "amountStr", e.target.value)}
+                    placeholder="0,00"
+                    className="w-full h-9 px-2 bg-white border border-[var(--border)] rounded text-sm outline-none font-semibold focus:border-[var(--accent)] text-right"
+                  />
                 </div>
 
                 {row.method === "pontos" && (
@@ -337,7 +353,7 @@ export function CloseComandaDialog({
                 )}
 
                 {row.method === "dinheiro" && (
-                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-dashed border-[var(--border)]">
+                  <div className="pt-2 border-t border-dashed border-[var(--border)] space-y-2">
                     <div>
                       <label className="text-[10px] text-[var(--text-3)] block mb-0.5">
                         Valor Recebido (R$)
@@ -347,19 +363,17 @@ export function CloseComandaDialog({
                         value={row.receivedStr}
                         onChange={(e) => handleUpdatePaymentRow(row.id, "receivedStr", e.target.value)}
                         placeholder={row.amountStr}
-                        className="w-full h-8 px-2 bg-emerald-50/50 border border-emerald-300 rounded text-xs outline-none text-right font-medium"
+                        className="w-full h-10 px-3 bg-emerald-50/50 border border-emerald-300 rounded-[var(--radius-control)] text-base outline-none text-right font-bold focus:border-[var(--accent)]"
                       />
                     </div>
-                    <div className="flex flex-col justify-center text-right">
-                      <span className="text-[10px] text-[var(--text-3)]">Troco Desta Forma</span>
-                      <span className="font-bold text-xs text-emerald-700">
-                        {formatCentsToBRL(
-                          Math.max(
-                            0,
-                            (row.receivedStr ? parseCents(row.receivedStr) : parseCents(row.amountStr)) -
-                              parseCents(row.amountStr)
-                          )
-                        )}
+                    <div className="flex justify-between items-baseline px-0.5">
+                      <span className="text-xs font-bold text-[var(--text-2)]">Troco a Devolver:</span>
+                      <span
+                        className={`text-base font-extrabold tabular-nums ${
+                          (changeByRow[row.id] ?? 0) > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
+                        }`}
+                      >
+                        {formatCentsToBRL(changeByRow[row.id] ?? 0)}
                       </span>
                     </div>
                   </div>

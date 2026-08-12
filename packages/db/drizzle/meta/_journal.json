@@ -78,6 +78,13 @@
       "when": 1786400000000,
       "tag": "0010_cad05_pdv05_mensalista_splits",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1786500000000,
+      "tag": "0011_add_is_monthly_to_court_bookings",
+      "breakpoints": true
     }
   ]
 }

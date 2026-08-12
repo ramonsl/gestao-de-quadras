@@ -528,6 +528,7 @@ export const courtBookings = pgTable(
     comandaId: uuid("comanda_id").references(() => comandas.id, { onDelete: "set null" }),
     /** Sem FK (mesma razão de comandas.customer_id: não travar anonimização LGPD). */
     customerId: uuid("customer_id"),
+    isMonthly: boolean("is_monthly").default(false).notNull(),
     createdByUserId: uuid("created_by_user_id").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

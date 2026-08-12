@@ -72,6 +72,7 @@ export interface CourtGridSlotCell {
   bookingId: string | null;
   comandaId: string | null;
   customerName: string | null;
+  isMonthly: boolean;
   /** Participantes quando a locação foi rateada entre múltiplas comandas. */
   splitParticipants: CourtBookingSplitParticipant[];
 }
@@ -108,6 +109,7 @@ type BookingRow = {
   status: string;
   comanda_id: string | null;
   customer_name: string | null;
+  is_monthly: boolean;
 };
 
 type SplitRow = {
@@ -143,7 +145,7 @@ export async function getCourtGridForDate(
     ),
     ctx.db.execute<BookingRow>(
       sql`SELECT cb.id, cb.court_id, cb.start_time_hhmm, cb.end_time_hhmm,
-                 cb.price_cents_at_booking, cb.status, cb.comanda_id, c.name AS customer_name
+                 cb.price_cents_at_booking, cb.status, cb.comanda_id, cb.is_monthly, c.name AS customer_name
           FROM court_bookings cb
           LEFT JOIN customers c ON c.id = cb.customer_id AND c.tenant_id = cb.tenant_id
           WHERE cb.tenant_id = ${ctx.tenantId}
@@ -195,6 +197,7 @@ export async function getCourtGridForDate(
       bookingId: b?.id ?? null,
       comandaId: b?.comanda_id ?? null,
       customerName: b?.customer_name ?? null,
+      isMonthly: b?.is_monthly ?? false,
       splitParticipants: b ? (splitsByBookingId.get(b.id) ?? []) : [],
     });
     rowSet.add(s.start_time_hhmm);
@@ -213,6 +216,7 @@ export async function getCourtGridForDate(
       bookingId: b.id,
       comandaId: b.comanda_id,
       customerName: b.customer_name,
+      isMonthly: b.is_monthly ?? false,
       splitParticipants: splitsByBookingId.get(b.id) ?? [],
     });
     rowSet.add(b.start_time_hhmm);
@@ -329,9 +333,9 @@ async function reserveRecurringMonthlyDates(
       await ctx.db.execute(
         sql`INSERT INTO court_bookings
               (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
-               end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+               end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
             VALUES (${ctx.tenantId}, ${args.courtId}, ${futureSlot.slotId}, ${futureDate}, ${args.startTimeHHMM},
-                    ${futureSlot.endTimeHHMM}, ${price}, 'booked', NULL, ${args.customerId ?? null}, ${ctx.actorUserId})`
+                    ${futureSlot.endTimeHHMM}, ${price}, 'booked', NULL, ${args.customerId ?? null}, true, ${ctx.actorUserId})`
       );
       createdCount++;
     } catch {
@@ -392,9 +396,9 @@ export async function createCourtBookingWithNewComanda(
     const bookingResult = await ctx.db.execute<{ id: string }>(
       sql`INSERT INTO court_bookings
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
-             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, ${data.customerId ?? null}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, ${data.customerId ?? null}, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -503,9 +507,9 @@ export async function addCourtBookingToExistingComanda(
     const bookingResult = await ctx.db.execute<{ id: string }>(
       sql`INSERT INTO court_bookings
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
-             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', ${data.comandaId}, ${comanda.customer_id}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', ${data.comandaId}, ${comanda.customer_id}, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -643,9 +647,9 @@ export async function splitCourtBookingAcrossComandas(
     const bookingResult = await ctx.db.execute<{ id: string }>(
       sql`INSERT INTO court_bookings
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
-             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, NULL, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, NULL, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;

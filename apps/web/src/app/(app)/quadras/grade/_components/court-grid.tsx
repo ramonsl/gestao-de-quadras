@@ -177,9 +177,10 @@ export function CourtGrid({
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-3)]">
-        <LegendDot className="border-[var(--border)] bg-white" label="Livre (clique nos blocos para selecionar 1h, 1h30, 2h)" />
-        <LegendDot className="border-[var(--accent)] bg-[var(--accent-tint)]" label="Ocupado" />
-        <LegendDot className="border-purple-300 bg-purple-50" label="Rateio (Múltiplas comandas)" />
+        <LegendDot className="border-[var(--border)] bg-white" label="Livre" />
+        <LegendDot className="border-[var(--accent)] bg-[var(--accent-tint)]" label="Ocupado (Nome do Cliente)" />
+        <LegendDot className="border-purple-300 bg-purple-50" label="Rateio (Nome 1 | Nome 2 | ...)" />
+        <LegendDot className="border-emerald-300 bg-emerald-50" label="🔄 Mensalista Recorrente" />
         <LegendDot className="border-[var(--warning)]" label="Reservado Online" />
       </div>
 
@@ -238,7 +239,7 @@ function SlotCell({
             : "border-[var(--border)] bg-white hover:border-[var(--accent)] hover:bg-[var(--accent-tint-soft)] text-[var(--text-2)]"
         }`}
       >
-        <span className="text-[11px] font-semibold">
+        <span className="text-[11.5px] font-semibold">
           {isSelected ? "Selecionado" : "Livre"}
         </span>
         <span className={`text-[10px] tabular-nums ${isSelected ? "text-white/90" : "text-[var(--text-3)]"}`}>
@@ -250,14 +251,18 @@ function SlotCell({
 
   if (cell.status === "reserved") {
     return (
-      <div className="w-full h-9 px-2 rounded-[var(--radius-control)] border border-[var(--warning)] flex items-center justify-between bg-amber-50/40">
-        <span className="text-[10px] font-semibold text-[var(--warning)]">Reservado</span>
-        <span className="text-[10px] text-[var(--text-3)] truncate max-w-[80px]">{cell.customerName ?? "Online"}</span>
+      <div className="w-full h-9 px-2 rounded-[var(--radius-control)] border border-[var(--warning)] flex items-center justify-between bg-amber-50/50">
+        <span className="text-[11.5px] font-extrabold text-[var(--warning)] truncate max-w-[130px]" title={cell.customerName ?? "Online"}>
+          {cell.customerName ?? "Reserva Online"}
+        </span>
+        <span className="text-[9.5px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+          Online
+        </span>
       </div>
     );
   }
 
-  // Rateio entre múltiplas comandas (PDV-05)
+  // Rateio entre múltiplas comandas (PDV-05): Exibe o NOME DAS PESSOAS direto!
   if (cell.splitParticipants && cell.splitParticipants.length > 0) {
     const names = cell.splitParticipants
       .map((p) => p.customerName ?? "Balcão")
@@ -267,14 +272,25 @@ function SlotCell({
 
     const inner = (
       <div
-        className="w-full h-9 px-2 rounded-[var(--radius-control)] border border-purple-300 bg-purple-50 flex items-center justify-between"
-        title={`Rateio entre: ${names}`}
+        className={`w-full h-9 px-2 rounded-[var(--radius-control)] border flex items-center justify-between gap-1 ${
+          cell.isMonthly
+            ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+            : "border-purple-300 bg-purple-50 text-purple-950"
+        }`}
+        title={`Locação Rateada: ${names}`}
       >
-        <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wide">
-          Rateio ({cell.splitParticipants.length})
-        </span>
-        <span className="text-[10px] font-medium text-purple-900 truncate max-w-[90px]">
-          {names}
+        <div className="flex items-center gap-1 min-w-0">
+          {cell.isMonthly && (
+            <span className="text-emerald-700 text-xs shrink-0 font-bold" title="Mensalista 🔄">
+              🔄
+            </span>
+          )}
+          <span className={`text-[11.5px] font-extrabold truncate ${cell.isMonthly ? "text-emerald-950" : "text-purple-950"}`}>
+            {names}
+          </span>
+        </div>
+        <span className={`text-[9.5px] font-bold px-1 py-0.5 rounded shrink-0 ${cell.isMonthly ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"}`}>
+          {cell.splitParticipants.length}P
         </span>
       </div>
     );
@@ -288,11 +304,28 @@ function SlotCell({
     );
   }
 
-  // booked (Ocupado simples)
+  // booked (Ocupado simples): Exibe o NOME DO CLIENTE em destaque!
+  const name = cell.customerName ?? "Venda Balcão";
+
   const inner = (
-    <div className="w-full h-9 px-2 rounded-[var(--radius-control)] border border-[var(--accent)] bg-[var(--accent-tint)] flex items-center justify-between">
-      <span className="text-[10px] font-semibold text-[var(--accent-hover)]">Ocupado</span>
-      <span className="text-[10px] text-[var(--text-2)] truncate max-w-[90px]">{cell.customerName ?? "Venda Balcão"}</span>
+    <div
+      className={`w-full h-9 px-2 rounded-[var(--radius-control)] border flex items-center justify-between gap-1 ${
+        cell.isMonthly
+          ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+          : "border-[var(--accent)] bg-[var(--accent-tint)]"
+      }`}
+      title={`Locação: ${name}`}
+    >
+      <div className="flex items-center gap-1 min-w-0">
+        {cell.isMonthly && (
+          <span className="text-emerald-700 text-xs shrink-0 font-bold" title="Mensalista 🔄">
+            🔄
+          </span>
+        )}
+        <span className={`text-[11.5px] font-extrabold truncate ${cell.isMonthly ? "text-emerald-950" : "text-[var(--accent-hover)]"}`}>
+          {name}
+        </span>
+      </div>
     </div>
   );
 

@@ -173,11 +173,15 @@ export async function deleteTimeSlotsByDay(
   if (days.length === 0) return;
   // Garante que courtId pertence ao tenant antes de deletar.
   await assertCourtInTenant(ctx, courtId);
+  const dayList = sql.join(
+    days.map((d) => sql`${d}`),
+    sql`, `
+  );
   await ctx.db.execute(
     sql`DELETE FROM court_time_slots
         WHERE tenant_id = ${ctx.tenantId}
           AND court_id = ${courtId}
-          AND day_of_week = ANY(${days})`
+          AND day_of_week IN (${dayList})`
   );
 }
 

@@ -72,32 +72,37 @@ export function CloseComandaDialog({
     return Math.round(num * 100);
   }
 
-  const { totalAllocatedCents, totalChangeCents, isValid } = useMemo(() => {
-    let allocated = 0;
-    let change = 0; // troco só existe em espécie (dinheiro): recebido − cobrado por linha
+  const { totalAllocatedCents, totalChangeCents, isValid, changeByRow } = useMemo(() => {
+    let allocated = 0; // Σ valor a cobrar (define "falta alocar")
+    let remaining = totalCents; // saldo da comanda ainda não coberto
+    let totalChange = 0;
     let valid = true;
+    const changeByRow: Record<string, number> = {};
 
     for (const p of payments) {
       const amt = parseCents(p.amountStr);
       if (amt <= 0) valid = false;
       allocated += amt;
 
-      if (p.method === "dinheiro") {
-        const rec = p.receivedStr ? parseCents(p.receivedStr) : amt;
-        if (rec < amt) {
-          valid = false;
-        } else {
-          change += rec - amt;
-        }
-      }
+      // Parcela desta forma que efetivamente cobre a comanda (nunca mais que o restante).
+      const charge = Math.min(amt, Math.max(0, remaining));
+      remaining -= charge;
+
+      // Valor entregue pelo cliente neste meio (dinheiro: recebido; demais: o cobrado).
+      const tendered = p.method === "dinheiro" ? (p.receivedStr ? parseCents(p.receivedStr) : amt) : amt;
+      // Troco = o que sobrou do que cobre a conta (qualquer excesso, em qualquer meio).
+      const change = Math.max(0, tendered - charge);
+      changeByRow[p.id] = change;
+      totalChange += change;
     }
 
     if (allocated < totalCents) valid = false;
 
     return {
       totalAllocatedCents: allocated,
-      totalChangeCents: change,
+      totalChangeCents: totalChange,
       isValid: valid && payments.length > 0,
+      changeByRow,
     };
   }, [payments, totalCents]);
 
@@ -363,22 +368,13 @@ export function CloseComandaDialog({
                     </div>
                     <div className="flex justify-between items-baseline px-0.5">
                       <span className="text-xs font-bold text-[var(--text-2)]">Troco a Devolver:</span>
-                      {(() => {
-                        const troco = Math.max(
-                          0,
-                          (row.receivedStr ? parseCents(row.receivedStr) : parseCents(row.amountStr)) -
-                            parseCents(row.amountStr)
-                        );
-                        return (
-                          <span
-                            className={`text-base font-extrabold tabular-nums ${
-                              troco > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
-                            }`}
-                          >
-                            {formatCentsToBRL(troco)}
-                          </span>
-                        );
-                      })()}
+                      <span
+                        className={`text-base font-extrabold tabular-nums ${
+                          (changeByRow[row.id] ?? 0) > 0 ? "text-emerald-700" : "text-[var(--text-3)]"
+                        }`}
+                      >
+                        {formatCentsToBRL(changeByRow[row.id] ?? 0)}
+                      </span>
                     </div>
                   </div>
                 )}

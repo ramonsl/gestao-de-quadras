@@ -622,6 +622,27 @@ describe("closeComanda (PDV-07)", () => {
     expect(result.payments[0].changeCents).toBe(1000);
   });
 
+  it("calcula troco pelo excesso mesmo em meio não-dinheiro (ex.: Pix acima do total)", async () => {
+    // Comanda R$ 9,00; cliente entrega R$ 100,00 → troco R$ 91,00.
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ status: "open" })],
+      [{ total: "900" }],
+      [makeComandaRow({ status: "closed" })],
+      [], // sessão de caixa aberta -> null
+      [makePaymentRow({ payment_method: "pix", amount_cents: 10000, received_cents: 10000, change_cents: 9100 })],
+      [{}],
+    ]);
+
+    const result = await closeComanda(ctx, {
+      comandaId: COMANDA_ID,
+      payments: [{ paymentMethod: "pix", amountCents: 10000 }],
+    });
+
+    assertSuccess(result);
+    // Troco = valor entregue (10000) − parcela que cobre a conta (900).
+    expect(result.totalChangeCents).toBe(9100);
+  });
+
   it("falha com comanda_empty se a comanda não possui itens lançados", async () => {
     const ctx = mkQueueCtx([
       [makeComandaRow({ status: "open" })],

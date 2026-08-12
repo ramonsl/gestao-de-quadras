@@ -126,10 +126,14 @@ Como operador de caixa, quero uma tela de locação de quadras em formato de gra
 
 **Critérios de Aceite:**
 *   **Grade por Slots de 30 Minutos:** A tela do PDV exibe a grade de agendamentos contendo as quadras nas colunas e as frações de 30 minutos nas linhas, permitindo selecionar 1 ou múltiplos blocos consecutivos (ex.: 2 blocos = 1h, 3 blocos = 1h30).
-*   **Identificação de Status:** Diferenciar claramente os horários por cores/status: Livre, Ocupado (comanda vinculada) e Reservado Online (sinal pago/pendente).
+*   **Identificação de Status:** Diferenciar claramente os horários por cores/status: Livre, Ocupado (comanda vinculada), Reservado Online (sinal pago/pendente) e Mensalista (recorrente).
 *   **Lançamento Integral ou Rateado em Comandas:** Ao confirmar a locação da quadra:
     *   *Lançamento Integral:* O valor total (calculado pela soma das frações de 30 min) é inserido na comanda de um único cliente responsável.
-    *   *Rateio entre Comandas (Divisão de Conta):* O operador de caixa pode selecionar 2 ou mais comandas abertas (ou selecionar múltiplos clientes) e dividir o valor total da locação igualmente (ou de forma proporcional) entre elas (ex.: quadra de R$ 140,00 dividida em 4 comandas = R$ 35,00 para cada comanda).
+    *   *Rateio entre Comandas (Divisão de Conta):* O operador de caixa pode selecionar 2 ou mais comandas abertas (ou selecionar múltiplos clientes) e dividir o valor total da locação igualmente (ou de forma proporcional) entre elas (ex.: quadra de R$ 180,00 dividida em 4 comandas = R$ 45,00 para cada comanda).
+    *   *Visualização Transparente dos Nomes no Rateio:* Quando o valor for rateado, o card da locação na grade e os seus detalhes devem exibir explicitamente o nome de todos os pagantes envolvidos no rateio (ex.: `Fulano | Ciclano | Beltrano | Mário`), indicando o status visual de quitação de cada fatia (ex.: quitado vs. pendente em comanda).
+*   **Controle e Sinalização de Mensalistas:**
+    *   Locações contratadas no formato mensalista (ver `CAD-09`) exibem um badge distintivo (ex.: 🔄 *Mensalista*) e o status do pagamento do mês (Pago no início do mês / Lançado em comanda).
+    *   *Alerta de Última Locação do Mês:* Na última ocorrência do dia da semana no mês vigente, o card da grade destaca um alerta visual ("Última locação do mês"), sinalizando ao operador a proximidade da renovação para o mês seguinte.
 *   **Bloqueio de Duplicidade:** O sistema impede de forma rígida a dupla marcação (duplicidade) do mesmo horário e quadra na grade.
 
 ---

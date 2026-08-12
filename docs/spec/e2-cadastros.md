@@ -157,3 +157,18 @@ Como Atendente, Gerente ou Administrador da arena, quero visualizar um painel co
 >   com o restante da área de clientes; padronização para `requireModule("crm")`
 >   fica como follow-up.
 
+---
+
+## CAD-09 [P1] — Gestão de Horários Mensalistas e Locação Recorrente
+**Descrição:**
+Como administrador da arena, quero cadastrar contratos de horários mensalistas para locação fixa e recorrente de quadras, garantindo o cálculo automático da quantidade exata de semanas no mês vigente e a cobrança/renovação antecipada.
+
+**Critérios de Aceite:**
+*   **Contrato de Mensalista:** Permite vincular um cliente a um horário fixo de quadra em dia(s) específico(s) da semana (ex.: toda Segunda-feira das 19:00 às 20:30 na Quadra 01).
+*   **Cálculo Automático de Ocorrências do Mês:** Ao gerar o lançamento da mensalidade no início do mês, o sistema calcula dinamicamente o número exato de ocorrências daquele dia da semana no mês vigente (ex.: 4 segundas-feiras em Fevereiro vs. 5 segundas-feiras em Março).
+*   **Precificação Consolidada:** O valor cobrado no mês é calculado multiplicando a quantidade de ocorrências do mês pelo valor unitário da sessão (`[Ocorrências no Mês] × [Valor por Sessão]`).
+*   **Integração e Quitação:** O valor da mensalidade pode ser pago antecipadamente no início do mês ou lançado na comanda/saldo devedor do cliente responsável.
+*   **Reserva Recorrente da Grade:** A criação/renovação do mensalista reserva automaticamente todas as datas correspondentes daquele mês na grade do PDV (`PDV-05`) e bloqueia a agenda pública online (`RES-01`).
+*   **Alerta de Fim de Mês e Renovação:** Na última sessão do mês vigente, o sistema exibe no PDV um destaque de término do ciclo ("Última locação do mês") e gera uma pendência de confirmação/renovação para o mês subsequente.
+
+

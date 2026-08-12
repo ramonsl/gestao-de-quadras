@@ -25,6 +25,7 @@ export async function createBookingAction(input: {
   date: string;
   startTimeHHMM: string;
   customerId?: string | null;
+  isMonthly?: boolean;
 }): Promise<CreateBookingActionResult> {
   const { ctx } = await requireModule("quadras");
 
@@ -33,6 +34,7 @@ export async function createBookingAction(input: {
     date: input.date,
     startTimeHHMM: input.startTimeHHMM,
     customerId: input.customerId ?? null,
+    isMonthly: input.isMonthly ?? false,
   });
 
   if (!result.success) {

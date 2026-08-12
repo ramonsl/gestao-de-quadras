@@ -108,7 +108,12 @@ export function BookSlotDialog({
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    const base = { courtId: slot.courtId, date, startTimeHHMM: slot.startTimeHHMM };
+    const base = {
+      courtId: slot.courtId,
+      date,
+      startTimeHHMM: slot.startTimeHHMM,
+      isMonthly: isMonthlyContract,
+    };
 
     let result: { success: boolean; error?: string };
     if (mode === "new") {

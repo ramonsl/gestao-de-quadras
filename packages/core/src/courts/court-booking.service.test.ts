@@ -1,5 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { SplitCourtBookingInputSchema } from "./court-booking.service";
+import {
+  SplitCourtBookingInputSchema,
+  getRemainingWeekdayDatesInMonth,
+} from "./court-booking.service";
+
+describe("getRemainingWeekdayDatesInMonth", () => {
+  it("calcula corretamente as terças-feiras restantes de Agosto/2026", () => {
+    // 11/08/2026 é uma Terça-feira
+    const dates = getRemainingWeekdayDatesInMonth("2026-08-11");
+    expect(dates).toEqual([
+      "2026-08-11",
+      "2026-08-18",
+      "2026-08-25",
+    ]);
+  });
+
+  it("calcula corretamente as segundas-feiras quando iniciado no início do mês", () => {
+    // 03/08/2026 é uma Segunda-feira (Agosto/2026 tem 5 segundas-feiras: 03, 10, 17, 24, 31)
+    const dates = getRemainingWeekdayDatesInMonth("2026-08-03");
+    expect(dates).toEqual([
+      "2026-08-03",
+      "2026-08-10",
+      "2026-08-17",
+      "2026-08-24",
+      "2026-08-31",
+    ]);
+  });
+});
 
 describe("SplitCourtBookingInputSchema", () => {
   it("valida entrada correta com 2 ou mais participantes (existentes e/ou novos)", () => {

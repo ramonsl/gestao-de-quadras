@@ -225,7 +225,32 @@ export async function getCourtGridForDate(
 
 // --- Criação da locação (AC3) -----------------------------------------------
 
-type ResolvedSlot = { slotId: string; endTimeHHMM: string; priceInCents: number };
+export function getRemainingWeekdayDatesInMonth(dateStr: string): string[] {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const targetDow = d.getUTCDay();
+
+  const dates: string[] = [];
+  const cursor = new Date(Date.UTC(year, month, 1));
+  while (cursor.getUTCMonth() === month) {
+    if (cursor.getUTCDay() === targetDow) {
+      const formatted = cursor.toISOString().slice(0, 10);
+      if (formatted >= dateStr) {
+        dates.push(formatted);
+      }
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+type ResolvedSlot = {
+  slotId: string;
+  endTimeHHMM: string;
+  priceInCents: number;
+  monthlyPriceInCents: number | null;
+};
 
 async function resolveSlot(
   ctx: TenantContext,
@@ -237,16 +262,29 @@ async function resolveSlot(
     id: string;
     end_time_hhmm: string;
     price_in_cents: number;
+    monthly_price_in_cents: number | null;
   }>(
-    sql`SELECT id, end_time_hhmm, price_in_cents FROM court_time_slots
+    sql`SELECT id, end_time_hhmm, price_in_cents, monthly_price_in_cents FROM court_time_slots
         WHERE tenant_id = ${ctx.tenantId}
           AND court_id = ${courtId}
           AND day_of_week = ${dayOfWeekOf(date)}
           AND start_time_hhmm = ${startTimeHHMM}
         LIMIT 1`
   );
-  const row = rows<{ id: string; end_time_hhmm: string; price_in_cents: number }>(result)[0];
-  return row ? { slotId: row.id, endTimeHHMM: row.end_time_hhmm, priceInCents: row.price_in_cents } : null;
+  const row = rows<{
+    id: string;
+    end_time_hhmm: string;
+    price_in_cents: number;
+    monthly_price_in_cents: number | null;
+  }>(result)[0];
+  return row
+    ? {
+        slotId: row.id,
+        endTimeHHMM: row.end_time_hhmm,
+        priceInCents: row.price_in_cents,
+        monthlyPriceInCents: row.monthly_price_in_cents,
+      }
+    : null;
 }
 
 async function insertRentalLine(
@@ -270,11 +308,46 @@ async function insertRentalLine(
   );
 }
 
+async function reserveRecurringMonthlyDates(
+  ctx: TenantContext,
+  args: {
+    courtId: string;
+    startDate: string;
+    startTimeHHMM: string;
+    customerId?: string | null;
+  }
+): Promise<number> {
+  const futureDates = getRemainingWeekdayDatesInMonth(args.startDate).filter(
+    (d) => d > args.startDate
+  );
+  let createdCount = 0;
+  for (const futureDate of futureDates) {
+    const futureSlot = await resolveSlot(ctx, args.courtId, futureDate, args.startTimeHHMM);
+    if (!futureSlot) continue;
+    const price = futureSlot.monthlyPriceInCents ?? futureSlot.priceInCents;
+    try {
+      await ctx.db.execute(
+        sql`INSERT INTO court_bookings
+              (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
+               end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+            VALUES (${ctx.tenantId}, ${args.courtId}, ${futureSlot.slotId}, ${futureDate}, ${args.startTimeHHMM},
+                    ${futureSlot.endTimeHHMM}, ${price}, 'booked', NULL, ${args.customerId ?? null}, ${ctx.actorUserId})`
+      );
+      createdCount++;
+    } catch {
+      // Ignora se o horário na data futura já estivesse reservado
+    }
+  }
+  return createdCount;
+}
+
 export const CreateCourtBookingInputSchema = z.object({
   courtId: z.string().uuid(),
   date: z.string().regex(DATE_REGEX),
   startTimeHHMM: z.string().regex(HHMM_REGEX),
   customerId: z.string().uuid().nullable().optional(),
+  /** Se for mensalismo, faz a reserva recorrente para todas as semanas restantes do mês (CAD-09). */
+  isMonthly: z.boolean().optional().default(false),
 });
 
 export type CreateCourtBookingResult =
@@ -365,7 +438,17 @@ export async function createCourtBookingWithNewComanda(
     courtId: data.courtId,
     date: data.date,
     startTimeHHMM: data.startTimeHHMM,
+    isMonthly: data.isMonthly,
   });
+
+  if (data.isMonthly) {
+    await reserveRecurringMonthlyDates(ctx, {
+      courtId: data.courtId,
+      startDate: data.date,
+      startTimeHHMM: data.startTimeHHMM,
+      customerId: data.customerId ?? null,
+    });
+  }
 
   return { success: true, bookingId, comandaId };
 }
@@ -375,6 +458,7 @@ export const AddCourtBookingToComandaInputSchema = z.object({
   date: z.string().regex(DATE_REGEX),
   startTimeHHMM: z.string().regex(HHMM_REGEX),
   comandaId: z.string().uuid(),
+  isMonthly: z.boolean().optional().default(false),
 });
 
 export type AddCourtBookingToComandaResult =
@@ -444,7 +528,17 @@ export async function addCourtBookingToExistingComanda(
     courtId: data.courtId,
     date: data.date,
     startTimeHHMM: data.startTimeHHMM,
+    isMonthly: data.isMonthly,
   });
+
+  if (data.isMonthly) {
+    await reserveRecurringMonthlyDates(ctx, {
+      courtId: data.courtId,
+      startDate: data.date,
+      startTimeHHMM: data.startTimeHHMM,
+      customerId: comanda.customer_id,
+    });
+  }
 
   return { success: true, bookingId };
 }
@@ -469,6 +563,7 @@ export const SplitCourtBookingInputSchema = z.object({
   startTimeHHMM: z.string().regex(HHMM_REGEX),
   /** Participantes do rateio (mínimo 2): comandas abertas ou novas comandas para clientes. */
   participants: z.array(SplitParticipantSchema).min(2, "Informe ao menos 2 participantes para rateio."),
+  isMonthly: z.boolean().optional().default(false),
 });
 
 export type SplitCourtBookingResult =
@@ -596,7 +691,17 @@ export async function splitCourtBookingAcrossComandas(
     startTimeHHMM: data.startTimeHHMM,
     totalCents: slot.priceInCents,
     participantCount: n,
+    isMonthly: data.isMonthly,
   });
+
+  if (data.isMonthly) {
+    await reserveRecurringMonthlyDates(ctx, {
+      courtId: data.courtId,
+      startDate: data.date,
+      startTimeHHMM: data.startTimeHHMM,
+      customerId: null,
+    });
+  }
 
   return { success: true, bookingId, splitIds };
 }

@@ -28,6 +28,7 @@ export async function splitBookingAction(input: {
   date: string;
   startTimeHHMM: string;
   participants: SplitParticipantItem[];
+  isMonthly?: boolean;
 }): Promise<SplitBookingActionResult> {
   const { ctx } = await requireModule("quadras");
 
@@ -36,6 +37,7 @@ export async function splitBookingAction(input: {
     date: input.date,
     startTimeHHMM: input.startTimeHHMM,
     participants: input.participants,
+    isMonthly: input.isMonthly ?? false,
   });
 
   if (!result.success) {

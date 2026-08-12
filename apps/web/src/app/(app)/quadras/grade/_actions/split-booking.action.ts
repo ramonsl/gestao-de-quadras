@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireModule } from "@/lib/session";
 import { splitCourtBookingAcrossComandas } from "@gestao-de-quadras/core/courts/court-booking.service";
 
+export type SplitParticipantItem =
+  | { type: "existing"; comandaId: string }
+  | { type: "new"; customerId?: string | null; customerName?: string };
+
 export interface SplitBookingActionResult {
   success: boolean;
   error?: string;
@@ -16,13 +20,14 @@ const REASON_MESSAGES: Record<string, string> = {
   double_booked: "Este horário acabou de ser ocupado. Atualize a grade.",
   comanda_not_found: "Uma das comandas selecionadas não existe mais.",
   comanda_closed: "Uma das comandas selecionadas já está fechada.",
+  customer_not_found: "Um dos clientes informados não foi encontrado.",
 };
 
 export async function splitBookingAction(input: {
   courtId: string;
   date: string;
   startTimeHHMM: string;
-  comandaIds: string[];
+  participants: SplitParticipantItem[];
 }): Promise<SplitBookingActionResult> {
   const { ctx } = await requireModule("quadras");
 
@@ -30,7 +35,7 @@ export async function splitBookingAction(input: {
     courtId: input.courtId,
     date: input.date,
     startTimeHHMM: input.startTimeHHMM,
-    comandaIds: input.comandaIds,
+    participants: input.participants,
   });
 
   if (!result.success) {

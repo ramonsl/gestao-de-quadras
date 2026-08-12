@@ -451,12 +451,24 @@ export async function addCourtBookingToExistingComanda(
 
 // --- Rateio de locação entre múltiplas comandas (PDV-05 AC3 — split) ---------
 
+export const SplitParticipantSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("existing"),
+    comandaId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("new"),
+    customerId: z.string().uuid().nullable().optional(),
+    customerName: z.string().optional(),
+  }),
+]);
+
 export const SplitCourtBookingInputSchema = z.object({
   courtId: z.string().uuid(),
   date: z.string().regex(DATE_REGEX),
   startTimeHHMM: z.string().regex(HHMM_REGEX),
-  /** IDs das comandas que participam do rateio (mínimo 2). */
-  comandaIds: z.array(z.string().uuid()).min(2, "Informe ao menos 2 comandas para rateio."),
+  /** Participantes do rateio (mínimo 2): comandas abertas ou novas comandas para clientes. */
+  participants: z.array(SplitParticipantSchema).min(2, "Informe ao menos 2 participantes para rateio."),
 });
 
 export type SplitCourtBookingResult =
@@ -469,19 +481,16 @@ export type SplitCourtBookingResult =
         | "past_date"
         | "double_booked"
         | "comanda_not_found"
-        | "comanda_closed";
+        | "comanda_closed"
+        | "customer_not_found";
       invalidComandaId?: string;
     };
 
 /**
- * PDV-05 — Rateio entre múltiplas comandas (Divisão de Conta).
+ * PDV-05 — Rateio entre múltiplas comandas (Divisão de Conta com Comandas Abertas ou Novas).
  *
  * Cria 1 `court_booking` (ocupa a grade — guarda anti-double-booking) e divide
- * o valor total igualmente entre N comandas abertas, inserindo:
- *  - 1 registro em `court_booking_splits` por comanda
- *  - 1 linha `court_rental` na comanda correspondente com o valor fracionado
- *
- * O campo `court_bookings.comanda_id` fica NULL para indicar rateio (use splits).
+ * o valor total igualmente entre N participantes (comandas existentes ou novas comandas abertas na hora).
  */
 export async function splitCourtBookingAcrossComandas(
   ctx: TenantContext,
@@ -501,18 +510,36 @@ export async function splitCourtBookingAcrossComandas(
   const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
   if (!slot) return { success: false, reason: "slot_not_found" };
 
-  // Valida todas as comandas antes de inserir qualquer coisa.
+  // Valida e resolve as comandas (existentes ou abre novas para quem precisa).
   type ComandaInfo = { id: string; customerId: string | null };
   const comandaInfos: ComandaInfo[] = [];
-  for (const comandaId of data.comandaIds) {
-    const res = await ctx.db.execute<{ status: string; customer_id: string | null }>(
-      sql`SELECT status, customer_id FROM comandas
-          WHERE id = ${comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
-    );
-    const comanda = rows<{ status: string; customer_id: string | null }>(res)[0];
-    if (!comanda) return { success: false, reason: "comanda_not_found", invalidComandaId: comandaId };
-    if (comanda.status !== "open") return { success: false, reason: "comanda_closed", invalidComandaId: comandaId };
-    comandaInfos.push({ id: comandaId, customerId: comanda.customer_id });
+
+  for (const part of data.participants) {
+    if (part.type === "existing") {
+      const res = await ctx.db.execute<{ status: string; customer_id: string | null }>(
+        sql`SELECT status, customer_id FROM comandas
+            WHERE id = ${part.comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+      );
+      const comanda = rows<{ status: string; customer_id: string | null }>(res)[0];
+      if (!comanda) return { success: false, reason: "comanda_not_found", invalidComandaId: part.comandaId };
+      if (comanda.status !== "open") return { success: false, reason: "comanda_closed", invalidComandaId: part.comandaId };
+      comandaInfos.push({ id: part.comandaId, customerId: comanda.customer_id });
+    } else {
+      // Abre uma nova comanda para o cliente (ou balcão)
+      const openRes = await openComanda(ctx, { customerId: part.customerId ?? null });
+      if (!openRes.success) {
+        if (openRes.reason === "customer_not_found") {
+          return { success: false, reason: "customer_not_found" };
+        }
+        // Se já tem comanda aberta, reusa essa comanda aberta!
+        if (openRes.reason === "already_has_open_comanda" && openRes.existingComandaId) {
+          comandaInfos.push({ id: openRes.existingComandaId, customerId: part.customerId ?? null });
+          continue;
+        }
+        return { success: false, reason: "comanda_not_found" };
+      }
+      comandaInfos.push({ id: openRes.comanda.id, customerId: openRes.comanda.customerId });
+    }
   }
 
   // Insere a marcação na grade (comanda_id = NULL → indica rateio via splits).
@@ -532,15 +559,14 @@ export async function splitCourtBookingAcrossComandas(
     throw err;
   }
 
-  // Divide o valor igualmente entre as N comandas.
-  const n = data.comandaIds.length;
+  // Divide o valor igualmente entre os N participantes.
+  const n = comandaInfos.length;
   const baseShare = Math.floor(slot.priceInCents / n);
   const remainder = slot.priceInCents - baseShare * n;
 
   const splitIds: string[] = [];
   for (let i = 0; i < comandaInfos.length; i++) {
     const comanda = comandaInfos[i];
-    // A primeira comanda absorve o centavo residual da divisão inteira.
     const shareCents = i === 0 ? baseShare + remainder : baseShare;
 
     const splitResult = await ctx.db.execute<{ id: string }>(
@@ -551,7 +577,7 @@ export async function splitCourtBookingAcrossComandas(
     );
     splitIds.push(rows<{ id: string }>(splitResult)[0].id);
 
-    // Insere linha de comanda com o valor fracionado.
+    // Insere a linha de comanda
     await insertRentalLine(ctx, {
       comandaId: comanda.id,
       bookingId,

@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Plus, Trash2, UserPlus, ShoppingBag } from "lucide-react";
 import { formatCentsToBRL } from "@/lib/currency";
 import { CustomerSearchCombobox } from "../../../pdv/_components/customer-search-combobox";
 import type { CustomerSearchResult } from "../../../pdv/_actions/search-customers.action";
 import { createBookingAction } from "../_actions/create-booking.action";
 import { addBookingToComandaAction } from "../_actions/add-booking-to-comanda.action";
-import { splitBookingAction } from "../_actions/split-booking.action";
+import { splitBookingAction, type SplitParticipantItem } from "../_actions/split-booking.action";
 
 export interface ComandaOption {
   id: string;
@@ -28,6 +29,10 @@ export interface SelectedSlotRange {
 
 type Mode = "new" | "existing" | "split";
 
+type SplitDraftParticipant =
+  | { id: string; kind: "existing"; comandaId: string; label: string }
+  | { id: string; kind: "new"; customerId: string | null; customerName: string };
+
 export function BookSlotDialog({
   open,
   onOpenChange,
@@ -45,17 +50,57 @@ export function BookSlotDialog({
   const [mode, setMode] = useState<Mode>("new");
   const [customer, setCustomer] = useState<CustomerSearchResult | null>(null);
   const [comandaId, setComandaId] = useState<string>(comandaOptions[0]?.id ?? "");
-  const [selectedSplitComandaIds, setSelectedSplitComandaIds] = useState<string[]>(
-    comandaOptions.slice(0, 2).map((c) => c.id)
-  );
+
+  // Lista dinâmica de participantes no rateio
+  const [splitParticipants, setSplitParticipants] = useState<SplitDraftParticipant[]>(() => {
+    if (comandaOptions.length >= 2) {
+      return [
+        { id: "1", kind: "existing", comandaId: comandaOptions[0].id, label: comandaOptions[0].label },
+        { id: "2", kind: "existing", comandaId: comandaOptions[1].id, label: comandaOptions[1].label },
+      ];
+    }
+    if (comandaOptions.length === 1) {
+      return [
+        { id: "1", kind: "existing", comandaId: comandaOptions[0].id, label: comandaOptions[0].label },
+        { id: "2", kind: "new", customerId: null, customerName: "Venda Balcão (Nova Comanda)" },
+      ];
+    }
+    return [
+      { id: "1", kind: "new", customerId: null, customerName: "Jogador 1 (Nova Comanda)" },
+      { id: "2", kind: "new", customerId: null, customerName: "Jogador 2 (Nova Comanda)" },
+    ];
+  });
+
+  const [isAddingNewCustomerToSplit, setIsAddingNewCustomerToSplit] = useState(false);
   const [isMonthlyContract, setIsMonthlyContract] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const toggleSplitComanda = (id: string) => {
-    setSelectedSplitComandaIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+  const addExistingComandaToSplit = (opt: ComandaOption) => {
+    // Evita duplicar a mesma comanda aberta
+    if (splitParticipants.some((p) => p.kind === "existing" && p.comandaId === opt.id)) return;
+    setSplitParticipants((prev) => [
+      ...prev,
+      { id: String(Date.now()), kind: "existing", comandaId: opt.id, label: opt.label },
+    ]);
+  };
+
+  const addNewCustomerToSplit = (c: CustomerSearchResult | null) => {
+    setSplitParticipants((prev) => [
+      ...prev,
+      {
+        id: String(Date.now()),
+        kind: "new",
+        customerId: c?.id ?? null,
+        customerName: c ? c.name : `Balcão (${prev.length + 1})`,
+      },
+    ]);
+    setIsAddingNewCustomerToSplit(false);
+  };
+
+  const removeSplitParticipant = (id: string) => {
+    if (splitParticipants.length <= 2) return; // Mínimo 2 participantes
+    setSplitParticipants((prev) => prev.filter((p) => p.id !== id));
   };
 
   async function handleConfirm() {
@@ -71,7 +116,12 @@ export function BookSlotDialog({
     } else if (mode === "existing") {
       result = await addBookingToComandaAction({ ...base, comandaId });
     } else {
-      result = await splitBookingAction({ ...base, comandaIds: selectedSplitComandaIds });
+      const payloadParticipants: SplitParticipantItem[] = splitParticipants.map((p) =>
+        p.kind === "existing"
+          ? { type: "existing", comandaId: p.comandaId }
+          : { type: "new", customerId: p.customerId, customerName: p.customerName }
+      );
+      result = await splitBookingAction({ ...base, participants: payloadParticipants });
     }
 
     if (!result.success) {
@@ -89,11 +139,16 @@ export function BookSlotDialog({
       ? true
       : mode === "existing"
       ? comandaId !== ""
-      : selectedSplitComandaIds.length >= 2;
+      : splitParticipants.length >= 2;
 
-  const splitCount = selectedSplitComandaIds.length;
+  const splitCount = splitParticipants.length;
   const shareCents = splitCount >= 2 ? Math.floor(slot.priceInCents / splitCount) : 0;
   const durationLabel = slot.slotCount === 1 ? "30 min" : `${(slot.slotCount * 0.5).toString().replace(".", ",")}h`;
+
+  // Comandas abertas ainda não adicionadas ao rateio
+  const availableOpenComandas = comandaOptions.filter(
+    (opt) => !splitParticipants.some((p) => p.kind === "existing" && p.comandaId === opt.id)
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -113,7 +168,7 @@ export function BookSlotDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Alternador de caminho (AC3 + Rateio) */}
+          {/* Alternador de modo */}
           <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
@@ -141,15 +196,13 @@ export function BookSlotDialog({
             <button
               type="button"
               onClick={() => setMode("split")}
-              disabled={comandaOptions.length < 2}
-              title={comandaOptions.length < 2 ? "Exige pelo menos 2 comandas abertas" : "Dividir entre N comandas"}
-              className={`py-2 px-1 text-[11px] font-semibold rounded border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              className={`py-2 px-1 text-[11px] font-semibold rounded border transition-all ${
                 mode === "split"
                   ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
                   : "bg-white text-[var(--text-2)] border-[var(--border)] hover:border-[var(--accent)]"
               }`}
             >
-              Ratear ({comandaOptions.length})
+              Ratear ({splitCount})
             </button>
           </div>
 
@@ -217,60 +270,126 @@ export function BookSlotDialog({
             </div>
           )}
 
+          {/* Mode SPLIT — Suporta N comandas (existentes ou novas) */}
           {mode === "split" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-[var(--text-2)] block">
-                  Selecione as comandas participantes (qualquer quantidade)
+                  Jogadores / Comandas no Rateio ({splitCount})
                 </label>
-                <span className="text-[11px] font-semibold text-[var(--accent)]">
-                  {splitCount} selecionada(s)
+                <span className="text-[11px] font-bold text-[var(--accent)]">
+                  {formatCentsToBRL(shareCents)} / jogador
                 </span>
               </div>
 
-              <div className="max-h-48 overflow-y-auto space-y-1.5 border border-[var(--border)] p-2 rounded-[var(--radius-control)] bg-[var(--bg-sunken)]">
-                {comandaOptions.map((c) => {
-                  const checked = selectedSplitComandaIds.includes(c.id);
-                  return (
-                    <label
-                      key={c.id}
-                      className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-colors text-xs select-none ${
-                        checked
-                          ? "bg-white border-[var(--accent)] text-[var(--text-1)] shadow-2xs"
-                          : "bg-white/60 border-[var(--border-soft)] text-[var(--text-2)] hover:border-[var(--border)]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleSplitComanda(c.id)}
-                          className="rounded text-[var(--accent)] focus:ring-[var(--accent)]"
-                        />
-                        <span className="font-semibold">{c.label}</span>
-                      </div>
-                      <span className="text-[11px] text-[var(--text-3)]">
-                        {formatCentsToBRL(c.totalCents)}
+              {/* Lista dos participantes configurados */}
+              <div className="space-y-1.5 max-h-44 overflow-y-auto border border-[var(--border)] p-2 rounded-[var(--radius-control)] bg-[var(--bg-sunken)]">
+                {splitParticipants.map((p, idx) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-2 rounded bg-white border border-[var(--border-soft)] text-xs shadow-2xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-full bg-[var(--accent-tint-soft)] text-[var(--accent)] font-bold text-[10px] flex items-center justify-center shrink-0">
+                        {idx + 1}
                       </span>
-                    </label>
-                  );
-                })}
+                      <span className="font-semibold text-[var(--text-1)] truncate">
+                        {p.kind === "existing" ? p.label : p.customerName}
+                      </span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-[var(--text-3)] shrink-0 font-medium">
+                        {p.kind === "existing" ? "Comanda Aberta" : "Nova Comanda"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-bold text-[var(--text-1)] tabular-nums">
+                        {formatCentsToBRL(shareCents)}
+                      </span>
+                      {splitParticipants.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => removeSplitParticipant(p.id)}
+                          className="text-gray-400 hover:text-[var(--danger)] p-1 rounded transition-colors"
+                          title="Remover participante"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {splitCount >= 2 ? (
-                <div className="p-2.5 rounded bg-[var(--accent-tint-soft)] border border-[var(--accent-tint)] text-xs text-[var(--text-1)] flex items-center justify-between">
-                  <span>
-                    Rateio de {formatCentsToBRL(slot.priceInCents)} entre {splitCount} comandas:
-                  </span>
-                  <span className="font-bold text-[var(--accent-hover)]">
-                    {formatCentsToBRL(shareCents)} / comanda
-                  </span>
-                </div>
-              ) : (
-                <p className="text-[11px] text-[var(--danger)]">
-                  Selecione pelo menos 2 comandas para realizar o rateio.
-                </p>
-              )}
+              {/* Botões para adicionar participantes (Nova Comanda ou Comanda Aberta) */}
+              <div className="space-y-2 pt-1">
+                {isAddingNewCustomerToSplit ? (
+                  <div className="p-2.5 rounded border border-[var(--accent-tint)] bg-[var(--accent-tint-soft)] space-y-2">
+                    <p className="text-xs font-bold text-[var(--accent-hover)] flex items-center gap-1">
+                      <UserPlus className="size-3.5" /> Adicionar Novo Jogador (Abrir Nova Comanda)
+                    </p>
+                    <CustomerSearchCombobox
+                      onSelect={(c) => addNewCustomerToSplit(c)}
+                      emptyStateSlot={
+                        <button
+                          type="button"
+                          onClick={() => addNewCustomerToSplit(null)}
+                          className="w-full text-left text-xs text-[var(--accent)] font-semibold p-1 hover:underline"
+                        >
+                          + Criar como Comanda de Balcão sem nome
+                        </button>
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCustomerToSplit(false)}
+                      className="text-[11px] text-[var(--text-3)] hover:underline"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCustomerToSplit(true)}
+                      className="flex-1 py-1.5 px-2.5 rounded border border-dashed border-[var(--accent)] text-[11px] font-semibold text-[var(--accent)] bg-white hover:bg-[var(--accent-tint-soft)] transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <UserPlus className="size-3.5" /> + Nova Comanda / Cliente
+                    </button>
+
+                    {availableOpenComandas.length > 0 && (
+                      <select
+                        onChange={(e) => {
+                          const opt = availableOpenComandas.find((c) => c.id === e.target.value);
+                          if (opt) addExistingComandaToSplit(opt);
+                          e.target.value = "";
+                        }}
+                        defaultValue=""
+                        className="py-1.5 px-2 text-[11px] font-semibold bg-white border border-[var(--border)] rounded cursor-pointer outline-none focus:border-[var(--accent)]"
+                      >
+                        <option value="" disabled>
+                          + Comanda Aberta...
+                        </option>
+                        {availableOpenComandas.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label} ({formatCentsToBRL(c.totalCents)})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Resumo do Rateio */}
+              <div className="p-2.5 rounded bg-[var(--accent-tint-soft)] border border-[var(--accent-tint)] text-xs text-[var(--text-1)] flex items-center justify-between">
+                <span>
+                  Divisão de {formatCentsToBRL(slot.priceInCents)} entre {splitCount} jogadores:
+                </span>
+                <span className="font-extrabold text-[var(--accent-hover)] text-sm">
+                  {formatCentsToBRL(shareCents)} / comanda
+                </span>
+              </div>
             </div>
           )}
 

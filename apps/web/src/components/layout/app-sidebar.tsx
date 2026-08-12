@@ -8,6 +8,7 @@ import {
   Package,
   ShoppingCart,
   Calendar,
+  CalendarDays,
   Wrench,
   Clock,
   GraduationCap,
@@ -76,6 +77,7 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
     ...(canAccess("quadras")
       ? [
           { href: "/admin/quadras", label: "Quadras", icon: Calendar },
+          { href: "/quadras/grade", label: "Grade de Locação", icon: CalendarDays },
           {
             href: "/admin/servicos-quadras",
             label: "Serviços de Quadra",

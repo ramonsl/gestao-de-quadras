@@ -258,7 +258,12 @@ export const comandaItems = pgTable(
     comandaId: uuid("comanda_id")
       .notNull()
       .references(() => comandas.id, { onDelete: "cascade" }),
-    productId: uuid("product_id").notNull(),
+    /** 'product' (copa/estoque) | 'court_rental' (locação de quadra — PDV-05). */
+    itemType: varchar("item_type", { length: 20 }).default("product").notNull(),
+    /** null para locação de quadra (não é produto do catálogo). */
+    productId: uuid("product_id"),
+    /** Locação vinculada (PDV-05); null para itens de produto. Sem FK dura para não travar. */
+    courtBookingId: uuid("court_booking_id"),
     productNameAtSale: varchar("product_name_at_sale", { length: 255 }).notNull(),
     quantity: integer("quantity").notNull(),
     unitPriceCentsAtSale: integer("unit_price_cents_at_sale").notNull(),
@@ -497,6 +502,44 @@ export const studentClassBalance = pgTable(
   })
 );
 
+/**
+ * Locação de quadra (PDV-05): uma marcação na grade (quadra × faixa horária ×
+ * dia). `price_cents_at_booking` é snapshot imutável do preço da faixa no momento
+ * da locação (regra 6/10). A dupla-marcação é impedida de forma RÍGIDA por um
+ * índice único parcial (tenant + quadra + dia + horário, exceto canceladas).
+ * `status`: 'booked' (Ocupado) | 'reserved' (reserva online pendente — RES-01,
+ * ainda sem fonte de dados) | 'cancelled'.
+ */
+export const courtBookings = pgTable(
+  "court_bookings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    courtId: uuid("court_id").notNull(),
+    /** Rastreio da faixa de origem (CAD-05); sem FK, a faixa pode ser editada depois. */
+    courtTimeSlotId: uuid("court_time_slot_id"),
+    bookingDate: date("booking_date").notNull(),
+    startTimeHHMM: varchar("start_time_hhmm", { length: 5 }).notNull(),
+    endTimeHHMM: varchar("end_time_hhmm", { length: 5 }).notNull(),
+    priceCentsAtBooking: integer("price_cents_at_booking").notNull(),
+    status: varchar("status", { length: 20 }).default("booked").notNull(),
+    comandaId: uuid("comanda_id").references(() => comandas.id, { onDelete: "set null" }),
+    /** Sem FK (mesma razão de comandas.customer_id: não travar anonimização LGPD). */
+    customerId: uuid("customer_id"),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    /** Guarda RÍGIDA anti-dupla-marcação (AC4): uma marcação ativa por quadra/dia/horário. */
+    noDoubleBookingIdx: uniqueIndex("court_bookings_no_double_idx")
+      .on(t.tenantId, t.courtId, t.bookingDate, t.startTimeHHMM)
+      .where(sql`status <> 'cancelled'`),
+    tenantDateIdx: index("court_bookings_tenant_date_idx").on(t.tenantId, t.bookingDate),
+    tenantComandaIdx: index("court_bookings_tenant_comanda_idx").on(t.tenantId, t.comandaId),
+  })
+);
+
 // --- Conexão WhatsApp / Baileys (WPP-01) ------------------------------------
 
 /**
@@ -698,6 +741,7 @@ export const TENANT_SCOPED_TABLES = [
   "courts",
   "court_services",
   "court_time_slots",
+  "court_bookings",
   "ad_spaces",
   "advertisers",
   "class_packages",
@@ -752,6 +796,8 @@ export type CourtService = typeof courtServices.$inferSelect;
 export type NewCourtService = typeof courtServices.$inferInsert;
 export type CourtTimeSlot = typeof courtTimeSlots.$inferSelect;
 export type NewCourtTimeSlot = typeof courtTimeSlots.$inferInsert;
+export type CourtBooking = typeof courtBookings.$inferSelect;
+export type NewCourtBooking = typeof courtBookings.$inferInsert;
 export type ClassPackage = typeof classPackages.$inferSelect;
 export type NewClassPackage = typeof classPackages.$inferInsert;
 export type StudentClassBalance = typeof studentClassBalance.$inferSelect;

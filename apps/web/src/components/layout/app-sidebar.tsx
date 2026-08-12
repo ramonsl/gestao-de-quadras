@@ -64,53 +64,41 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
   const modules = session.modulesAllowed ?? [];
   const canAccess = (moduleName: string) => isAdmin || modules.includes(moduleName);
 
+  // Operação do dia a dia (Atendimento, Caixa e Agendamentos)
   const operacaoItems: NavItem[] = [
+    ...(canAccess("quadras")
+      ? [{ href: "/quadras/grade", label: "Grade de Locação", icon: CalendarDays }]
+      : []),
+    ...(canAccess("pdv")
+      ? [{ href: "/pdv", label: "PDV / Comandas", icon: ShoppingCart }]
+      : []),
     ...(canAccess("crm")
       ? [{ href: "/customers", label: "Clientes", icon: Users }]
       : []),
-    ...(canAccess("pdv")
-      ? [
-          { href: "/pdv", label: "PDV / Comandas", icon: ShoppingCart },
-          { href: "/admin/produtos", label: "Produtos", icon: Package },
-        ]
-      : []),
+  ];
+
+  // Cadastros e Configurações Base
+  const cadastroItems: NavItem[] = [
     ...(canAccess("quadras")
       ? [
           { href: "/admin/quadras", label: "Quadras", icon: Calendar },
-          { href: "/quadras/grade", label: "Grade de Locação", icon: CalendarDays },
-          {
-            href: "/admin/servicos-quadras",
-            label: "Serviços de Quadra",
-            icon: Wrench,
-          },
-          {
-            href: "/admin/faixas-horarias",
-            label: "Faixas Horárias",
-            icon: Clock,
-          },
-          {
-            href: "/admin/pacotes-aulas",
-            label: "Pacotes de Aulas",
-            icon: GraduationCap,
-          },
+          { href: "/admin/faixas-horarias", label: "Faixas Horárias", icon: Clock },
+          { href: "/admin/servicos-quadras", label: "Serviços de Quadra", icon: Wrench },
+          { href: "/admin/pacotes-aulas", label: "Pacotes de Aulas", icon: GraduationCap },
         ]
+      : []),
+    ...(canAccess("pdv")
+      ? [{ href: "/admin/produtos", label: "Produtos", icon: Package }]
       : []),
     ...(canAccess("publicidade")
       ? [
-          {
-            href: "/admin/publicidade/espacos",
-            label: "Espaços Publicitários",
-            icon: Megaphone,
-          },
-          {
-            href: "/admin/publicidade/anunciantes",
-            label: "Anunciantes",
-            icon: Building2,
-          },
+          { href: "/admin/publicidade/espacos", label: "Espaços Publicitários", icon: Megaphone },
+          { href: "/admin/publicidade/anunciantes", label: "Anunciantes", icon: Building2 },
         ]
       : []),
   ];
 
+  // Administração de Sistema
   const adminItems: NavItem[] = isAdmin
     ? [
         { href: "/usuarios", label: "Usuários & Permissões", icon: ShieldCheck },
@@ -203,13 +191,14 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
         />
       </div>
 
-      {/* Navegação Principal */}
+      {/* Navegação Principal Separada em Operação, Cadastros e Sistema */}
       <nav className="flex-1 px-2 py-3 space-y-4 overflow-y-auto overflow-x-hidden">
+        {/* Seção 1: Operação */}
         {operacaoItems.length > 0 && (
           <div>
             {!isCollapsed ? (
-              <p className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-[0.08em] text-white/40">
-                CADASTROS & OPERAÇÃO
+              <p className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-[0.08em] text-white/40 uppercase">
+                OPERAÇÃO
               </p>
             ) : (
               <div className="my-1.5 border-t border-white/10" />
@@ -218,11 +207,26 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
           </div>
         )}
 
+        {/* Seção 2: Cadastros */}
+        {cadastroItems.length > 0 && (
+          <div>
+            {!isCollapsed ? (
+              <p className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-[0.08em] text-white/40 uppercase">
+                CADASTROS
+              </p>
+            ) : (
+              <div className="my-1.5 border-t border-white/10" />
+            )}
+            <div className="space-y-1">{cadastroItems.map(renderLink)}</div>
+          </div>
+        )}
+
+        {/* Seção 3: Sistema & Configuração */}
         {adminItems.length > 0 && (
           <div>
             {!isCollapsed ? (
-              <p className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-[0.08em] text-white/40">
-                CONFIGURAÇÃO
+              <p className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-[0.08em] text-white/40 uppercase">
+                SISTEMA
               </p>
             ) : (
               <div className="my-1.5 border-t border-white/10" />

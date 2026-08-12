@@ -338,8 +338,9 @@ async function reserveRecurringMonthlyDates(
                     ${futureSlot.endTimeHHMM}, ${price}, 'booked', NULL, ${args.customerId ?? null}, true, ${ctx.actorUserId})`
       );
       createdCount++;
-    } catch {
-      // Ignora se o horário na data futura já estivesse reservado
+    } catch (err) {
+      // Só ignora a dupla-marcação esperada (índice único); erros reais sobem.
+      if (!isUniqueViolation(err)) throw err;
     }
   }
   return createdCount;
@@ -389,6 +390,8 @@ export async function createCourtBookingWithNewComanda(
 
   const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
   if (!slot) return { success: false, reason: "slot_not_found" };
+  // Tarifa mensalista aplicada já na 1ª ocorrência quando isMonthly (CAD-05/CAD-09).
+  const effectivePriceCents = data.isMonthly ? slot.monthlyPriceInCents ?? slot.priceInCents : slot.priceInCents;
 
   // Insere a marcação PRIMEIRO — o índice único parcial é a guarda rígida (AC4).
   let bookingId: string;
@@ -398,7 +401,7 @@ export async function createCourtBookingWithNewComanda(
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
              end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, ${data.customerId ?? null}, ${data.isMonthly}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${effectivePriceCents}, 'booked', NULL, ${data.customerId ?? null}, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -434,7 +437,7 @@ export async function createCourtBookingWithNewComanda(
     courtName: court.name,
     startTimeHHMM: data.startTimeHHMM,
     endTimeHHMM: slot.endTimeHHMM,
-    priceInCents: slot.priceInCents,
+    priceInCents: effectivePriceCents,
   });
   await writeAudit(ctx, "pdv.court_booking.created", {
     bookingId,
@@ -501,6 +504,7 @@ export async function addCourtBookingToExistingComanda(
 
   const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
   if (!slot) return { success: false, reason: "slot_not_found" };
+  const effectivePriceCents = data.isMonthly ? slot.monthlyPriceInCents ?? slot.priceInCents : slot.priceInCents;
 
   let bookingId: string;
   try {
@@ -509,7 +513,7 @@ export async function addCourtBookingToExistingComanda(
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
              end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', ${data.comandaId}, ${comanda.customer_id}, ${data.isMonthly}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${effectivePriceCents}, 'booked', ${data.comandaId}, ${comanda.customer_id}, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -524,7 +528,7 @@ export async function addCourtBookingToExistingComanda(
     courtName: court.name,
     startTimeHHMM: data.startTimeHHMM,
     endTimeHHMM: slot.endTimeHHMM,
-    priceInCents: slot.priceInCents,
+    priceInCents: effectivePriceCents,
   });
   await writeAudit(ctx, "pdv.court_booking.added_to_comanda", {
     bookingId,
@@ -557,7 +561,7 @@ export const SplitParticipantSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("new"),
     customerId: z.string().uuid().nullable().optional(),
-    customerName: z.string().optional(),
+    customerName: z.string().max(120).optional(),
   }),
 ]);
 
@@ -608,6 +612,7 @@ export async function splitCourtBookingAcrossComandas(
 
   const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
   if (!slot) return { success: false, reason: "slot_not_found" };
+  const effectivePriceCents = data.isMonthly ? slot.monthlyPriceInCents ?? slot.priceInCents : slot.priceInCents;
 
   // Valida e resolve as comandas (existentes ou abre novas para quem precisa).
   type ComandaInfo = { id: string; customerId: string | null };
@@ -649,7 +654,7 @@ export async function splitCourtBookingAcrossComandas(
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
              end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, NULL, ${data.isMonthly}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${effectivePriceCents}, 'booked', NULL, NULL, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -660,8 +665,8 @@ export async function splitCourtBookingAcrossComandas(
 
   // Divide o valor igualmente entre os N participantes.
   const n = comandaInfos.length;
-  const baseShare = Math.floor(slot.priceInCents / n);
-  const remainder = slot.priceInCents - baseShare * n;
+  const baseShare = Math.floor(effectivePriceCents / n);
+  const remainder = effectivePriceCents - baseShare * n;
 
   const splitIds: string[] = [];
   for (let i = 0; i < comandaInfos.length; i++) {
@@ -693,7 +698,7 @@ export async function splitCourtBookingAcrossComandas(
     courtId: data.courtId,
     date: data.date,
     startTimeHHMM: data.startTimeHHMM,
-    totalCents: slot.priceInCents,
+    totalCents: effectivePriceCents,
     participantCount: n,
     isMonthly: data.isMonthly,
   });

@@ -770,6 +770,7 @@ export const TENANT_SCOPED_TABLES = [
   "court_services",
   "court_time_slots",
   "court_bookings",
+  "court_booking_splits",
   "ad_spaces",
   "advertisers",
   "class_packages",

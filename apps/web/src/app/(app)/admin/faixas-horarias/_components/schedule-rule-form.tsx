@@ -5,6 +5,7 @@ import { saveScheduleRuleAction } from "../_actions/save-schedule-rule.action";
 import { generateSlotsFromRule } from "@gestao-de-quadras/core/courts/court-time-slot.service";
 import type { Court } from "@gestao-de-quadras/db/schema";
 import Link from "next/link";
+import { AlertTriangle, Clock, CheckCircle2, XCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,13 +114,13 @@ function PreviewPanel({
         </div>
 
         {previewError ? (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
-            <span className="text-red-500 text-sm">⚠</span>
-            <p className="text-xs text-red-700">{previewError}</p>
+          <div className="flex items-center gap-2 p-3 rounded-[var(--radius-card)] bg-[var(--danger-bg)] border border-[var(--danger-border)]">
+            <AlertTriangle className="size-4 text-[var(--danger)] shrink-0" aria-hidden />
+            <p className="text-xs text-[var(--danger)]">{previewError}</p>
           </div>
         ) : preview.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-            <div className="text-3xl mb-2 opacity-30">🕐</div>
+            <Clock className="size-8 mb-2 text-[var(--text-disabled)]" aria-hidden />
             <p className="text-xs text-[var(--text-3)]">
               Preencha o horário e o preço<br />para ver o preview dos blocos.
             </p>
@@ -182,13 +183,15 @@ function PreviewPanel({
 
       {/* Feedback */}
       {formState.status === "success" && (
-        <div className="p-3 rounded-[var(--radius-card)] bg-green-50 border border-green-200 text-sm text-green-800">
-          ✅ Grade salva! {formState.slotsCreated} slot(s) criado(s).
+        <div className="p-3 rounded-[var(--radius-card)] bg-[var(--success-bg)] border border-[var(--success-border)] text-sm text-[var(--success)] flex items-center gap-2">
+          <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+          Grade salva! {formState.slotsCreated} slot(s) criado(s).
         </div>
       )}
       {formState.status === "error" && (
-        <div className="p-3 rounded-[var(--radius-card)] bg-red-50 border border-red-200 text-sm text-red-800">
-          ❌ {formState.error}
+        <div className="p-3 rounded-[var(--radius-card)] bg-[var(--danger-bg)] border border-[var(--danger-border)] text-sm text-[var(--danger)] flex items-center gap-2">
+          <XCircle className="size-4 shrink-0" aria-hidden />
+          {formState.error}
         </div>
       )}
     </aside>

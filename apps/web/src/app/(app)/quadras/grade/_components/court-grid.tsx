@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Repeat } from "lucide-react";
 import type { CourtGrid as CourtGridData, CourtGridSlotCell } from "@gestao-de-quadras/core/courts/court-booking.service";
 import { formatCentsToBRL } from "@/lib/currency";
 import { BookSlotDialog, type ComandaOption, type SelectedSlotRange } from "./book-slot-dialog";
@@ -179,8 +180,8 @@ export function CourtGrid({
       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--text-3)]">
         <LegendDot className="border-[var(--border)] bg-white" label="Livre" />
         <LegendDot className="border-[var(--accent)] bg-[var(--accent-tint)]" label="Ocupado (Nome do Cliente)" />
-        <LegendDot className="border-purple-300 bg-purple-50" label="Rateio (Nome 1 | Nome 2 | ...)" />
-        <LegendDot className="border-emerald-300 bg-emerald-50" label="🔄 Mensalista Recorrente" />
+        <LegendDot className="border-[var(--split-border)] bg-[var(--split-bg)]" label="Rateio (Nome 1 | Nome 2 | ...)" />
+        <LegendDot className="border-[var(--success-border)] bg-[var(--success-bg)]" label="Mensalista Recorrente" />
         <LegendDot className="border-[var(--warning)]" label="Reservado Online" />
       </div>
 
@@ -251,11 +252,11 @@ function SlotCell({
 
   if (cell.status === "reserved") {
     return (
-      <div className="w-full h-9 px-2 rounded-[var(--radius-control)] border border-[var(--warning)] flex items-center justify-between bg-amber-50/50">
-        <span className="text-[11.5px] font-extrabold text-[var(--warning)] truncate max-w-[130px]" title={cell.customerName ?? "Online"}>
+      <div className="w-full h-9 px-2 rounded-[var(--radius-control)] border border-[var(--warning-border)] flex items-center justify-between bg-[var(--warning-bg)]">
+        <span className="text-[11.5px] font-extrabold text-[var(--text-1)] truncate max-w-[130px]" title={cell.customerName ?? "Online"}>
           {cell.customerName ?? "Reserva Online"}
         </span>
-        <span className="text-[9.5px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+        <span className="text-[9.5px] font-bold px-1 py-0.5 rounded-[var(--radius-control)] bg-[var(--warning-border)] text-[var(--text-1)] shrink-0">
           Online
         </span>
       </div>
@@ -274,22 +275,20 @@ function SlotCell({
       <div
         className={`w-full h-9 px-2 rounded-[var(--radius-control)] border flex items-center justify-between gap-1 ${
           cell.isMonthly
-            ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-            : "border-purple-300 bg-purple-50 text-purple-950"
+            ? "border-[var(--success-border)] bg-[var(--success-bg)]"
+            : "border-[var(--split-border)] bg-[var(--split-bg)]"
         }`}
         title={`Locação Rateada: ${names}`}
       >
         <div className="flex items-center gap-1 min-w-0">
           {cell.isMonthly && (
-            <span className="text-emerald-700 text-xs shrink-0 font-bold" title="Mensalista 🔄">
-              🔄
-            </span>
+            <Repeat className="size-3 shrink-0 text-[var(--success)]" aria-label="Mensalista" />
           )}
-          <span className={`text-[11.5px] font-extrabold truncate ${cell.isMonthly ? "text-emerald-950" : "text-purple-950"}`}>
+          <span className={`text-[11.5px] font-extrabold truncate ${cell.isMonthly ? "text-[var(--success)]" : "text-[var(--split)]"}`}>
             {names}
           </span>
         </div>
-        <span className={`text-[9.5px] font-bold px-1 py-0.5 rounded shrink-0 ${cell.isMonthly ? "bg-emerald-100 text-emerald-800" : "bg-purple-100 text-purple-800"}`}>
+        <span className={`text-[9.5px] font-bold px-1 py-0.5 rounded-[var(--radius-control)] shrink-0 ${cell.isMonthly ? "bg-[var(--success-border)] text-[var(--success)]" : "bg-[var(--split-border)] text-[var(--split)]"}`}>
           {cell.splitParticipants.length}P
         </span>
       </div>
@@ -311,18 +310,16 @@ function SlotCell({
     <div
       className={`w-full h-9 px-2 rounded-[var(--radius-control)] border flex items-center justify-between gap-1 ${
         cell.isMonthly
-          ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+          ? "border-[var(--success-border)] bg-[var(--success-bg)]"
           : "border-[var(--accent)] bg-[var(--accent-tint)]"
       }`}
       title={`Locação: ${name}`}
     >
       <div className="flex items-center gap-1 min-w-0">
         {cell.isMonthly && (
-          <span className="text-emerald-700 text-xs shrink-0 font-bold" title="Mensalista 🔄">
-            🔄
-          </span>
+          <Repeat className="size-3 shrink-0 text-[var(--success)]" aria-label="Mensalista" />
         )}
-        <span className={`text-[11.5px] font-extrabold truncate ${cell.isMonthly ? "text-emerald-950" : "text-[var(--accent-hover)]"}`}>
+        <span className={`text-[11.5px] font-extrabold truncate ${cell.isMonthly ? "text-[var(--success)]" : "text-[var(--accent-hover)]"}`}>
           {name}
         </span>
       </div>

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, UserPlus, ShoppingBag } from "lucide-react";
+import { Plus, Trash2, UserPlus, ShoppingBag, Repeat } from "lucide-react";
 import { formatCentsToBRL } from "@/lib/currency";
 import { CustomerSearchCombobox } from "../../../pdv/_components/customer-search-combobox";
 import type { CustomerSearchResult } from "../../../pdv/_actions/search-customers.action";
@@ -408,7 +408,8 @@ export function BookSlotDialog({
                 className="rounded text-[var(--accent)] focus:ring-[var(--accent)]"
               />
               <span className="text-xs font-semibold text-[var(--text-1)] flex items-center gap-1">
-                🔄 Marcação de Mensalista
+                <Repeat className="size-3.5 text-[var(--success)]" aria-hidden />
+                Marcação de Mensalista
                 <span className="text-[10px] font-normal text-[var(--text-3)]">
                   (Contrato recorrente — CAD-09)
                 </span>

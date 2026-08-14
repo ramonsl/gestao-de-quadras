@@ -97,6 +97,15 @@ export function CashSessionBar({ initialSession, openComandasCount }: CashSessio
           <Button
             type="button"
             variant="outline"
+            onClick={() => router.push("/pdv/caixa")}
+            className="text-xs font-semibold text-[var(--accent)] border-[var(--accent-tint)] hover:bg-[var(--accent-tint-soft)]"
+          >
+            📊 Gestão de Caixa
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => setIsMovementDialogOpen(true)}
             className="text-xs font-semibold"
           >

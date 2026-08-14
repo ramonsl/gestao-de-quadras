@@ -724,3 +724,96 @@ export async function cancelComandaItem(
   return { success: true, comandaItemId: data.comandaItemId };
 }
 
+// --- Reabertura / Estorno de comanda fechada (PDV-09) -----------------------
+
+export const ReopenComandaInputSchema = z.object({
+  comandaId: z.string().uuid(),
+  reason: z.string().trim().min(5, "A justificativa deve ter no mínimo 5 caracteres."),
+  supervisorPassword: z.string().optional(),
+});
+
+export type ReopenComandaResult =
+  | { success: true; comandaId: string }
+  | {
+      success: false;
+      reason:
+        | "comanda_not_found"
+        | "comanda_not_closed"
+        | "unauthorized"
+        | "invalid_supervisor_password";
+    };
+
+export async function reopenComanda(
+  ctx: TenantContext,
+  input: z.infer<typeof ReopenComandaInputSchema>
+): Promise<ReopenComandaResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("reopenComanda exige ctx.actorUserId.");
+  }
+  const data = ReopenComandaInputSchema.parse(input);
+
+  const comandaResult = await ctx.db.execute<ComandaRow>(
+    sql`SELECT ${COMANDA_COLS} FROM comandas WHERE id = ${data.comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const comandaRow = rows<ComandaRow>(comandaResult)[0];
+  if (!comandaRow) return { success: false, reason: "comanda_not_found" };
+  if (comandaRow.status !== "closed") return { success: false, reason: "comanda_not_closed" };
+
+  const actorResult = await ctx.db.execute<{ role: string }>(
+    sql`SELECT role FROM users_tenants WHERE id = ${ctx.actorUserId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const actorRole = rows<{ role: string }>(actorResult)[0]?.role;
+
+  let supervisorUserId = ctx.actorUserId;
+
+  if (actorRole === "admin" || actorRole === "gerente") {
+    // Autorizado diretamente pelo supervisor
+  } else {
+    if (!data.supervisorPassword) {
+      return { success: false, reason: "unauthorized" };
+    }
+
+    const supervisorsResult = await ctx.db.execute<{ id: string; password_hash: string | null }>(
+      sql`SELECT id, password_hash FROM users_tenants
+          WHERE tenant_id = ${ctx.tenantId}
+            AND role IN ('admin', 'gerente')
+            AND status = 'active'`
+    );
+    const supervisors = rows<{ id: string; password_hash: string | null }>(supervisorsResult);
+
+    let validSupervisorId: string | null = null;
+    for (const sup of supervisors) {
+      if (sup.password_hash) {
+        const matches = await verify(sup.password_hash, data.supervisorPassword);
+        if (matches) {
+          validSupervisorId = sup.id;
+          break;
+        }
+      }
+    }
+
+    if (!validSupervisorId) {
+      return { success: false, reason: "invalid_supervisor_password" };
+    }
+
+    supervisorUserId = validSupervisorId;
+  }
+
+  // Altera status de volta para open
+  await ctx.db.execute(
+    sql`UPDATE comandas SET status = 'open', updated_at = now()
+        WHERE id = ${data.comandaId} AND tenant_id = ${ctx.tenantId}`
+  );
+
+  await writeAudit(ctx, "pdv.comanda.reopened", {
+    comandaId: data.comandaId,
+    reason: data.reason,
+    reopenedByUserId: ctx.actorUserId,
+    supervisorUserId,
+  });
+
+  return { success: true, comandaId: data.comandaId };
+}
+
+

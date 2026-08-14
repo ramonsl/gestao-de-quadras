@@ -33,6 +33,10 @@
     --danger: #b0433a;
     --danger-bg: #fdf3f2;
     --danger-border: #f4c5c2;
+    /* Rateio de locação (PDV-05): acento derivado (mesma croma 0.13, hue variado). */
+    --split: oklch(0.48 0.13 300);
+    --split-bg: oklch(0.96 0.06 300);
+    --split-border: oklch(0.9 0.08 300);
 
     /* Texto */
     --text-1: #1a1916;

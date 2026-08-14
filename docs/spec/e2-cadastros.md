@@ -62,7 +62,10 @@ Como administrador da arena, quero cadastrar o horário de funcionamento do club
 *   **Seleção em Lote de Dias da Semana (UX Otimizada):** Permitir selecionar múltiplos dias da semana de uma só vez (ex.: `[x] Seg [x] Ter [x] Qua [x] Qui [x] Sex`) para aplicar a mesma regra de funcionamento e preço em massa, sem necessidade de cadastrar dia por dia.
 *   **Horário de Funcionamento e Abertura/Fechamento:** Permitir definir o horário de abertura (ex.: `08:00`) e o horário de fechamento da arena (ex.: `22:00`).
 *   **Grade Modularizada em Slots de 30 Minutos:** O sistema gera automaticamente a grade dividida em blocos fixos de 30 em 30 minutos (ex.: 08:00–08:30, 08:30–09:00, etc.).
-*   **Precificação por Fração de 30 Minutos:** A tarifa cadastrada no sistema é expressa por fração de 30 minutos (ex.: R$ 35,00 por fração no horário nobre das 18h às 22h vs. R$ 25,00 por fração no horário diurno). Uma locação de 60, 90 ou 120 minutos consome respectivamente 2, 3 ou 4 blocos e calcula o valor total acumulado.
+*   **Precificação por Fração de 30 Minutos (Avulso vs. Mensalista):** A tarifa cadastrada no sistema é expressa por fração de 30 minutos e permite definir dois valores distintos por bloco:
+    *   *Tarifa Avulsa (Regular):* Preço padrão praticado para locações pontuais (ex.: R$ 35,00 por fração no horário nobre).
+    *   *Tarifa Mensalista:* Preço promocional/diferenciado por fração aplicável a contratos mensalistas recorrentes (ex.: R$ 25,00 por fração no mesmo horário nobre).
+    *   *Cálculo Acumulado:* Uma locação de 60, 90 ou 120 minutos consome respectivamente 2, 3 ou 4 blocos e calcula o valor total acumulado segundo a modalidade escolhida (Avulsa ou Mensalista).
 *   **Bloqueio de Horários/Quadras:** Permitir o bloqueio de slots individuais de 30 minutos ou da quadra inteira para manutenção, torneios ou eventos corporativos, impedindo reservas públicas e presenciais nesses blocos.
 *   **Sincronização em Tempo Real:** Alterações na grade e bloqueios refletem instantaneamente no PDV físico de caixa (`PDV-05`) e na página pública de reservas online (`RES-01`).
 
@@ -157,3 +160,16 @@ Como Atendente, Gerente ou Administrador da arena, quero visualizar um painel co
 >   com o restante da área de clientes; padronização para `requireModule("crm")`
 >   fica como follow-up.
 
+---
+
+## CAD-09 [P1] — Gestão de Horários Mensalistas e Locação Recorrente
+**Descrição:**
+Como administrador da arena, quero cadastrar contratos de horários mensalistas para locação fixa e recorrente de quadras, garantindo o cálculo automático da quantidade exata de semanas no mês vigente e a cobrança/renovação antecipada.
+
+**Critérios de Aceite:**
+*   **Contrato de Mensalista:** Permite vincular um cliente a um horário fixo de quadra em dia(s) específico(s) da semana (ex.: toda Segunda-feira das 19:00 às 20:30 na Quadra 01).
+*   **Cálculo Automático de Ocorrências do Mês:** Ao gerar o lançamento da mensalidade no início do mês, o sistema calcula dinamicamente o número exato de ocorrências daquele dia da semana no mês vigente (ex.: 4 segundas-feiras em Fevereiro vs. 5 segundas-feiras em Março).
+*   **Precificação Consolidada com Tarifa Mensalista:** O valor cobrado no mês é calculado multiplicando a quantidade de ocorrências do mês pela **Tarifa Mensalista** cadastrada para aqueles blocos de 30 minutos (`[Ocorrências no Mês] × [Soma das Tarifas Mensalistas das frações]`). Se não houver tarifa mensalista específica cadastrada, o sistema utiliza por padrão a tarifa avulsa da grade.
+*   **Integração e Quitação:** O valor da mensalidade pode ser pago antecipadamente no início do mês ou lançado na comanda/saldo devedor do cliente responsável.
+*   **Reserva Recorrente da Grade:** A criação/renovação do mensalista reserva automaticamente todas as datas correspondentes daquele mês na grade do PDV (`PDV-05`) e bloqueia a agenda pública online (`RES-01`).
+*   **Alerta de Fim de Mês e Renovação:** Na última sessão do mês vigente, o sistema exibe no PDV um destaque de término do ciclo ("Última locação do mês") e gera uma pendência de confirmação/renovação para o mês subsequente.

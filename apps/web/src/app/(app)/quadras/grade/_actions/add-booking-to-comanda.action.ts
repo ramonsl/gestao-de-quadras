@@ -23,6 +23,7 @@ export async function addBookingToComandaAction(input: {
   date: string;
   startTimeHHMM: string;
   comandaId: string;
+  isMonthly?: boolean;
 }): Promise<AddBookingActionResult> {
   const { ctx } = await requireModule("quadras");
 
@@ -31,6 +32,7 @@ export async function addBookingToComandaAction(input: {
     date: input.date,
     startTimeHHMM: input.startTimeHHMM,
     comandaId: input.comandaId,
+    isMonthly: input.isMonthly ?? false,
   });
 
   if (!result.success) {

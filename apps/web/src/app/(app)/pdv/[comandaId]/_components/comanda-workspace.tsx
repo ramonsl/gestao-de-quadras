@@ -12,6 +12,7 @@ import { PrintTicketToggle } from "./print-ticket-toggle";
 import { ProductSelectorGrid } from "./product-selector-grid";
 import { CloseComandaDialog } from "./close-comanda-dialog";
 import { CancelItemDialog } from "./cancel-item-dialog";
+import { ReopenComandaDialog } from "./reopen-comanda-dialog";
 import { CustomerSearchCombobox } from "../../_components/customer-search-combobox";
 import {
   QuickCreateCustomerDialog,
@@ -72,6 +73,7 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole }
 
   const [isAddingItems, setIsAddingItems] = useState(false);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [isReopenOpen, setIsReopenOpen] = useState(false);
   const [pendingCart, setPendingCart] = useState<PendingItem[]>([]);
 
   const [pendingDebitCents, setPendingDebitCents] = useState(0);
@@ -334,14 +336,24 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole }
           )}
 
           {isClosed && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => window.print()}
-              className="font-semibold text-xs gap-1.5"
-            >
-              🖨️ Imprimir Extrato
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsReopenOpen(true)}
+                className="font-semibold text-xs gap-1.5 border-amber-300 text-amber-900 bg-amber-50/50 hover:bg-amber-100"
+              >
+                🔄 Estornar / Reabrir Comanda
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => window.print()}
+                className="font-semibold text-xs gap-1.5"
+              >
+                🖨️ Imprimir Extrato
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -651,14 +663,17 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole }
           }}
           comandaId={comandaId}
           comandaItemId={cancellingItem.id}
-          itemProductName={cancellingItem.productNameAtSale}
-          itemQuantity={cancellingItem.quantity}
-          itemTotalPriceCents={cancellingItem.lineTotalCents}
-          userRole={userRole}
-          onSuccess={() => {
-            setCancellingItem(null);
-            router.refresh();
-          }}
+          itemName={cancellingItem.productNameAtSale}
+          isSupervisor={userRole === "admin" || userRole === "gerente"}
+        />
+      )}
+
+      {isReopenOpen && (
+        <ReopenComandaDialog
+          open={isReopenOpen}
+          onOpenChange={setIsReopenOpen}
+          comandaId={comandaId}
+          isSupervisor={userRole === "admin" || userRole === "gerente"}
         />
       )}
     </div>

@@ -25,7 +25,6 @@ export default async function CourtGridPage({
   const { ctx } = await requireModule("quadras");
 
   const today = todayStr();
-  // Datas passadas caem para hoje (a grade só opera hoje e futuros — AC1).
   const date = dateParam && DATE_REGEX.test(dateParam) && dateParam >= today ? dateParam : today;
 
   const [grid, openComandas] = await Promise.all([
@@ -41,12 +40,17 @@ export default async function CourtGridPage({
 
   return (
     <>
-      <header className="h-14 shrink-0 px-[22px] flex items-center justify-between bg-white border-b border-[var(--border)]">
-        <h1 className="text-base font-semibold text-[var(--text-1)]">Grade de Locação</h1>
-        <DateNavigator date={date} minDate={today} />
+      <header className="h-14 shrink-0 px-4 flex items-center justify-between bg-white border-b border-[var(--border)]">
+        <h1 className="text-base font-semibold text-[var(--text-1)] shrink-0">Grade de Locação</h1>
+        <div className="flex-1 flex justify-center px-4">
+          <DateNavigator date={date} minDate={today} />
+        </div>
+        <div className="w-24 shrink-0 text-right text-xs text-[var(--text-3)]">
+          {grid.courts.length} quadra(s)
+        </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-auto p-[22px]">
+      <main className="flex-1 min-h-0 overflow-auto p-3">
         {grid.courts.length === 0 ? (
           <div className="bg-white border border-[var(--border)] rounded-[var(--radius-card)] p-8 text-center text-sm text-[var(--text-3)]">
             Nenhuma quadra ativa cadastrada. Cadastre quadras e faixas horárias para usar a grade.

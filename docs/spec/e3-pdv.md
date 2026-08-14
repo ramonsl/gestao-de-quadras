@@ -125,11 +125,17 @@ Como operador de caixa, quero transferir uma comanda não paga para a conta do c
 Como operador de caixa, quero uma tela de locação de quadras em formato de grade (quadras × blocos de 30 min), para agendar locações e optar por lançar o valor integral na comanda do responsável ou rateá-lo entre as comandas dos jogadores.
 
 **Critérios de Aceite:**
-*   **Grade por Slots de 30 Minutos:** A tela do PDV exibe a grade de agendamentos contendo as quadras nas colunas e as frações de 30 minutos nas linhas, permitindo selecionar 1 ou múltiplos blocos consecutivos (ex.: 2 blocos = 1h, 3 blocos = 1h30).
-*   **Identificação de Status:** Diferenciar claramente os horários por cores/status: Livre, Ocupado (comanda vinculada) e Reservado Online (sinal pago/pendente).
-*   **Lançamento Integral ou Rateado em Comandas:** Ao confirmar a locação da quadra:
-    *   *Lançamento Integral:* O valor total (calculado pela soma das frações de 30 min) é inserido na comanda de um único cliente responsável.
-    *   *Rateio entre Comandas (Divisão de Conta):* O operador de caixa pode selecionar 2 ou mais comandas abertas (ou selecionar múltiplos clientes) e dividir o valor total da locação igualmente (ou de forma proporcional) entre elas (ex.: quadra de R$ 140,00 dividida em 4 comandas = R$ 35,00 para cada comanda).
+*   **Grade por Slots de 30 Minutos e Seleção por Arraste (Drag-to-Select):** A tela do PDV exibe a grade de agendamentos contendo as quadras nas colunas e as frações de 30 minutos nas linhas. O operador pode clicar e arrastar (ou selecionar os blocos inicial e final) na mesma quadra para agendar períodos de 1h (2 blocos), 1h30 (3 blocos), 2h (4 blocos) ou mais de uma só vez, com cálculo acumulado em tempo real.
+*   **Header Densificado com Data Centralizada:** A data escolhida ganha destaque centralizado no cabeçalho (ex.: `TERÇA-FEIRA, 12/08/2026`), e a grade possui margens reduzidas para maximizar o aproveitamento da tela sem rolagem vertical excessiva.
+*   **Identificação de Status:** Diferenciar claramente os horários por cores/status: Livre, Ocupado (comanda vinculada), Rateio (múltiplas comandas), Reservado Online (sinal pago/pendente) e Mensalista (recorrente 🔄).
+*   **Lançamento Integral, Rateado (N Jogadores) ou Mensalista:** Ao confirmar a locação da quadra:
+    *   *Lançamento Integral:* O valor total é inserido na comanda de um único cliente responsável.
+    *   *Rateio entre N Comandas (Divisão Ilimitada):* O operador pode selecionar N comandas abertas (2, 3, 4, 5 ou mais jogadores) e dividir o valor total da locação igualmente entre elas (ex.: R$ 180,00 divididos em 4 comandas = R$ 45,00/comanda).
+    *   *Visualização Transparente dos Nomes no Rateio:* O card da locação na grade exibe explicitamente o nome de todos os pagantes envolvidos (`Fulano | Ciclano | Beltrano | Mário`).
+    *   *Marcação de Mensalista:* Opção de marcar a locação como mensalista recorrente no modal, aplicando a tarifa mensalista da faixa (quando configurada).
+*   **Controle e Sinalização de Mensalistas:**
+    *   Locações contratadas no formato mensalista (ver `CAD-09`) exibem um badge distintivo (ex.: 🔄 *Mensalista*) e o status do pagamento do mês.
+    *   *Alerta de Última Locação do Mês:* Na última ocorrência do dia da semana no mês vigente, o card da grade destaca um alerta visual ("Última locação do mês"), sinalizando ao operador a proximidade da renovação para o mês seguinte.
 *   **Bloqueio de Duplicidade:** O sistema impede de forma rígida a dupla marcação (duplicidade) do mesmo horário e quadra na grade.
 
 ---

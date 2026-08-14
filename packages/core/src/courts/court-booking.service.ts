@@ -57,6 +57,12 @@ async function writeAudit(
 
 export type CourtSlotStatus = "free" | "booked" | "reserved";
 
+export interface CourtBookingSplitParticipant {
+  comandaId: string | null;
+  customerName: string | null;
+  shareCents: number;
+}
+
 export interface CourtGridSlotCell {
   courtId: string;
   startTimeHHMM: string;
@@ -66,6 +72,9 @@ export interface CourtGridSlotCell {
   bookingId: string | null;
   comandaId: string | null;
   customerName: string | null;
+  isMonthly: boolean;
+  /** Participantes quando a locação foi rateada entre múltiplas comandas. */
+  splitParticipants: CourtBookingSplitParticipant[];
 }
 
 export interface CourtGridColumn {
@@ -100,6 +109,14 @@ type BookingRow = {
   status: string;
   comanda_id: string | null;
   customer_name: string | null;
+  is_monthly: boolean;
+};
+
+type SplitRow = {
+  court_booking_id: string;
+  comanda_id: string | null;
+  customer_name: string | null;
+  share_cents: number;
 };
 
 /**
@@ -115,7 +132,7 @@ export async function getCourtGridForDate(
   const { date } = GetCourtGridInputSchema.parse(input);
   const dow = dayOfWeekOf(date);
 
-  const [courtsResult, slotsResult, bookingsResult] = await Promise.all([
+  const [courtsResult, slotsResult, bookingsResult, splitsResult] = await Promise.all([
     ctx.db.execute<CourtRow>(
       sql`SELECT id, name FROM courts
           WHERE tenant_id = ${ctx.tenantId} AND is_active = true
@@ -128,25 +145,43 @@ export async function getCourtGridForDate(
     ),
     ctx.db.execute<BookingRow>(
       sql`SELECT cb.id, cb.court_id, cb.start_time_hhmm, cb.end_time_hhmm,
-                 cb.price_cents_at_booking, cb.status, cb.comanda_id, c.name AS customer_name
+                 cb.price_cents_at_booking, cb.status, cb.comanda_id, cb.is_monthly, c.name AS customer_name
           FROM court_bookings cb
           LEFT JOIN customers c ON c.id = cb.customer_id AND c.tenant_id = cb.tenant_id
           WHERE cb.tenant_id = ${ctx.tenantId}
             AND cb.booking_date = ${date}
             AND cb.status <> 'cancelled'`
     ),
+    ctx.db.execute<SplitRow>(
+      sql`SELECT cbs.court_booking_id, cbs.comanda_id, c.name AS customer_name, cbs.share_cents
+          FROM court_booking_splits cbs
+          LEFT JOIN customers c ON c.id = cbs.customer_id AND c.tenant_id = cbs.tenant_id
+          WHERE cbs.tenant_id = ${ctx.tenantId}
+            AND cbs.court_booking_id IN (
+              SELECT id FROM court_bookings
+              WHERE tenant_id = ${ctx.tenantId}
+                AND booking_date = ${date}
+                AND status <> 'cancelled'
+            )`
+    ),
   ]);
 
   const courts = rows<CourtRow>(courtsResult).map((c) => ({ courtId: c.id, courtName: c.name }));
   const slots = rows<SlotRow>(slotsResult);
   const bookings = rows<BookingRow>(bookingsResult);
+  const splits = rows<SplitRow>(splitsResult);
+
+  const splitsByBookingId = new Map<string, CourtBookingSplitParticipant[]>();
+  for (const s of splits) {
+    const arr = splitsByBookingId.get(s.court_booking_id) ?? [];
+    arr.push({ comandaId: s.comanda_id, customerName: s.customer_name, shareCents: s.share_cents });
+    splitsByBookingId.set(s.court_booking_id, arr);
+  }
 
   const key = (courtId: string, start: string) => `${courtId}|${start}`;
   const bookingByKey = new Map<string, BookingRow>();
   for (const b of bookings) bookingByKey.set(key(b.court_id, b.start_time_hhmm), b);
 
-  // Uma célula por (quadra, horário) existente — a partir das faixas configuradas
-  // e também de qualquer marcação cujo horário não exista mais na configuração.
   const cellByKey = new Map<string, CourtGridSlotCell>();
   const rowSet = new Set<string>();
 
@@ -162,6 +197,8 @@ export async function getCourtGridForDate(
       bookingId: b?.id ?? null,
       comandaId: b?.comanda_id ?? null,
       customerName: b?.customer_name ?? null,
+      isMonthly: b?.is_monthly ?? false,
+      splitParticipants: b ? (splitsByBookingId.get(b.id) ?? []) : [],
     });
     rowSet.add(s.start_time_hhmm);
   }
@@ -179,6 +216,8 @@ export async function getCourtGridForDate(
       bookingId: b.id,
       comandaId: b.comanda_id,
       customerName: b.customer_name,
+      isMonthly: b.is_monthly ?? false,
+      splitParticipants: splitsByBookingId.get(b.id) ?? [],
     });
     rowSet.add(b.start_time_hhmm);
   }
@@ -190,7 +229,32 @@ export async function getCourtGridForDate(
 
 // --- Criação da locação (AC3) -----------------------------------------------
 
-type ResolvedSlot = { slotId: string; endTimeHHMM: string; priceInCents: number };
+export function getRemainingWeekdayDatesInMonth(dateStr: string): string[] {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const targetDow = d.getUTCDay();
+
+  const dates: string[] = [];
+  const cursor = new Date(Date.UTC(year, month, 1));
+  while (cursor.getUTCMonth() === month) {
+    if (cursor.getUTCDay() === targetDow) {
+      const formatted = cursor.toISOString().slice(0, 10);
+      if (formatted >= dateStr) {
+        dates.push(formatted);
+      }
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+type ResolvedSlot = {
+  slotId: string;
+  endTimeHHMM: string;
+  priceInCents: number;
+  monthlyPriceInCents: number | null;
+};
 
 async function resolveSlot(
   ctx: TenantContext,
@@ -202,16 +266,29 @@ async function resolveSlot(
     id: string;
     end_time_hhmm: string;
     price_in_cents: number;
+    monthly_price_in_cents: number | null;
   }>(
-    sql`SELECT id, end_time_hhmm, price_in_cents FROM court_time_slots
+    sql`SELECT id, end_time_hhmm, price_in_cents, monthly_price_in_cents FROM court_time_slots
         WHERE tenant_id = ${ctx.tenantId}
           AND court_id = ${courtId}
           AND day_of_week = ${dayOfWeekOf(date)}
           AND start_time_hhmm = ${startTimeHHMM}
         LIMIT 1`
   );
-  const row = rows<{ id: string; end_time_hhmm: string; price_in_cents: number }>(result)[0];
-  return row ? { slotId: row.id, endTimeHHMM: row.end_time_hhmm, priceInCents: row.price_in_cents } : null;
+  const row = rows<{
+    id: string;
+    end_time_hhmm: string;
+    price_in_cents: number;
+    monthly_price_in_cents: number | null;
+  }>(result)[0];
+  return row
+    ? {
+        slotId: row.id,
+        endTimeHHMM: row.end_time_hhmm,
+        priceInCents: row.price_in_cents,
+        monthlyPriceInCents: row.monthly_price_in_cents,
+      }
+    : null;
 }
 
 async function insertRentalLine(
@@ -235,11 +312,47 @@ async function insertRentalLine(
   );
 }
 
+async function reserveRecurringMonthlyDates(
+  ctx: TenantContext,
+  args: {
+    courtId: string;
+    startDate: string;
+    startTimeHHMM: string;
+    customerId?: string | null;
+  }
+): Promise<number> {
+  const futureDates = getRemainingWeekdayDatesInMonth(args.startDate).filter(
+    (d) => d > args.startDate
+  );
+  let createdCount = 0;
+  for (const futureDate of futureDates) {
+    const futureSlot = await resolveSlot(ctx, args.courtId, futureDate, args.startTimeHHMM);
+    if (!futureSlot) continue;
+    const price = futureSlot.monthlyPriceInCents ?? futureSlot.priceInCents;
+    try {
+      await ctx.db.execute(
+        sql`INSERT INTO court_bookings
+              (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
+               end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
+            VALUES (${ctx.tenantId}, ${args.courtId}, ${futureSlot.slotId}, ${futureDate}, ${args.startTimeHHMM},
+                    ${futureSlot.endTimeHHMM}, ${price}, 'booked', NULL, ${args.customerId ?? null}, true, ${ctx.actorUserId})`
+      );
+      createdCount++;
+    } catch (err) {
+      // Só ignora a dupla-marcação esperada (índice único); erros reais sobem.
+      if (!isUniqueViolation(err)) throw err;
+    }
+  }
+  return createdCount;
+}
+
 export const CreateCourtBookingInputSchema = z.object({
   courtId: z.string().uuid(),
   date: z.string().regex(DATE_REGEX),
   startTimeHHMM: z.string().regex(HHMM_REGEX),
   customerId: z.string().uuid().nullable().optional(),
+  /** Se for mensalismo, faz a reserva recorrente para todas as semanas restantes do mês (CAD-09). */
+  isMonthly: z.boolean().optional().default(false),
 });
 
 export type CreateCourtBookingResult =
@@ -277,6 +390,8 @@ export async function createCourtBookingWithNewComanda(
 
   const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
   if (!slot) return { success: false, reason: "slot_not_found" };
+  // Tarifa mensalista aplicada já na 1ª ocorrência quando isMonthly (CAD-05/CAD-09).
+  const effectivePriceCents = data.isMonthly ? slot.monthlyPriceInCents ?? slot.priceInCents : slot.priceInCents;
 
   // Insere a marcação PRIMEIRO — o índice único parcial é a guarda rígida (AC4).
   let bookingId: string;
@@ -284,9 +399,9 @@ export async function createCourtBookingWithNewComanda(
     const bookingResult = await ctx.db.execute<{ id: string }>(
       sql`INSERT INTO court_bookings
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
-             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', NULL, ${data.customerId ?? null}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${effectivePriceCents}, 'booked', NULL, ${data.customerId ?? null}, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -322,7 +437,7 @@ export async function createCourtBookingWithNewComanda(
     courtName: court.name,
     startTimeHHMM: data.startTimeHHMM,
     endTimeHHMM: slot.endTimeHHMM,
-    priceInCents: slot.priceInCents,
+    priceInCents: effectivePriceCents,
   });
   await writeAudit(ctx, "pdv.court_booking.created", {
     bookingId,
@@ -330,7 +445,17 @@ export async function createCourtBookingWithNewComanda(
     courtId: data.courtId,
     date: data.date,
     startTimeHHMM: data.startTimeHHMM,
+    isMonthly: data.isMonthly,
   });
+
+  if (data.isMonthly) {
+    await reserveRecurringMonthlyDates(ctx, {
+      courtId: data.courtId,
+      startDate: data.date,
+      startTimeHHMM: data.startTimeHHMM,
+      customerId: data.customerId ?? null,
+    });
+  }
 
   return { success: true, bookingId, comandaId };
 }
@@ -340,6 +465,7 @@ export const AddCourtBookingToComandaInputSchema = z.object({
   date: z.string().regex(DATE_REGEX),
   startTimeHHMM: z.string().regex(HHMM_REGEX),
   comandaId: z.string().uuid(),
+  isMonthly: z.boolean().optional().default(false),
 });
 
 export type AddCourtBookingToComandaResult =
@@ -378,15 +504,16 @@ export async function addCourtBookingToExistingComanda(
 
   const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
   if (!slot) return { success: false, reason: "slot_not_found" };
+  const effectivePriceCents = data.isMonthly ? slot.monthlyPriceInCents ?? slot.priceInCents : slot.priceInCents;
 
   let bookingId: string;
   try {
     const bookingResult = await ctx.db.execute<{ id: string }>(
       sql`INSERT INTO court_bookings
             (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
-             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, created_by_user_id)
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
           VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
-                  ${slot.endTimeHHMM}, ${slot.priceInCents}, 'booked', ${data.comandaId}, ${comanda.customer_id}, ${ctx.actorUserId})
+                  ${slot.endTimeHHMM}, ${effectivePriceCents}, 'booked', ${data.comandaId}, ${comanda.customer_id}, ${data.isMonthly}, ${ctx.actorUserId})
           RETURNING id`
     );
     bookingId = rows<{ id: string }>(bookingResult)[0].id;
@@ -401,7 +528,7 @@ export async function addCourtBookingToExistingComanda(
     courtName: court.name,
     startTimeHHMM: data.startTimeHHMM,
     endTimeHHMM: slot.endTimeHHMM,
-    priceInCents: slot.priceInCents,
+    priceInCents: effectivePriceCents,
   });
   await writeAudit(ctx, "pdv.court_booking.added_to_comanda", {
     bookingId,
@@ -409,7 +536,182 @@ export async function addCourtBookingToExistingComanda(
     courtId: data.courtId,
     date: data.date,
     startTimeHHMM: data.startTimeHHMM,
+    isMonthly: data.isMonthly,
   });
+
+  if (data.isMonthly) {
+    await reserveRecurringMonthlyDates(ctx, {
+      courtId: data.courtId,
+      startDate: data.date,
+      startTimeHHMM: data.startTimeHHMM,
+      customerId: comanda.customer_id,
+    });
+  }
 
   return { success: true, bookingId };
 }
+
+// --- Rateio de locação entre múltiplas comandas (PDV-05 AC3 — split) ---------
+
+export const SplitParticipantSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("existing"),
+    comandaId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("new"),
+    customerId: z.string().uuid().nullable().optional(),
+    customerName: z.string().max(120).optional(),
+  }),
+]);
+
+export const SplitCourtBookingInputSchema = z.object({
+  courtId: z.string().uuid(),
+  date: z.string().regex(DATE_REGEX),
+  startTimeHHMM: z.string().regex(HHMM_REGEX),
+  /** Participantes do rateio (mínimo 2): comandas abertas ou novas comandas para clientes. */
+  participants: z.array(SplitParticipantSchema).min(2, "Informe ao menos 2 participantes para rateio."),
+  isMonthly: z.boolean().optional().default(false),
+});
+
+export type SplitCourtBookingResult =
+  | { success: true; bookingId: string; splitIds: string[] }
+  | {
+      success: false;
+      reason:
+        | "court_not_found"
+        | "slot_not_found"
+        | "past_date"
+        | "double_booked"
+        | "comanda_not_found"
+        | "comanda_closed"
+        | "customer_not_found";
+      invalidComandaId?: string;
+    };
+
+/**
+ * PDV-05 — Rateio entre múltiplas comandas (Divisão de Conta com Comandas Abertas ou Novas).
+ *
+ * Cria 1 `court_booking` (ocupa a grade — guarda anti-double-booking) e divide
+ * o valor total igualmente entre N participantes (comandas existentes ou novas comandas abertas na hora).
+ */
+export async function splitCourtBookingAcrossComandas(
+  ctx: TenantContext,
+  input: z.infer<typeof SplitCourtBookingInputSchema>,
+  now: Date = new Date()
+): Promise<SplitCourtBookingResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("splitCourtBookingAcrossComandas exige ctx.actorUserId.");
+  }
+  const data = SplitCourtBookingInputSchema.parse(input);
+
+  const court = await getCourtById(ctx, data.courtId);
+  if (!court) return { success: false, reason: "court_not_found" };
+  if (data.date < todayLocalStr(now)) return { success: false, reason: "past_date" };
+
+  const slot = await resolveSlot(ctx, data.courtId, data.date, data.startTimeHHMM);
+  if (!slot) return { success: false, reason: "slot_not_found" };
+  const effectivePriceCents = data.isMonthly ? slot.monthlyPriceInCents ?? slot.priceInCents : slot.priceInCents;
+
+  // Valida e resolve as comandas (existentes ou abre novas para quem precisa).
+  type ComandaInfo = { id: string; customerId: string | null };
+  const comandaInfos: ComandaInfo[] = [];
+
+  for (const part of data.participants) {
+    if (part.type === "existing") {
+      const res = await ctx.db.execute<{ status: string; customer_id: string | null }>(
+        sql`SELECT status, customer_id FROM comandas
+            WHERE id = ${part.comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+      );
+      const comanda = rows<{ status: string; customer_id: string | null }>(res)[0];
+      if (!comanda) return { success: false, reason: "comanda_not_found", invalidComandaId: part.comandaId };
+      if (comanda.status !== "open") return { success: false, reason: "comanda_closed", invalidComandaId: part.comandaId };
+      comandaInfos.push({ id: part.comandaId, customerId: comanda.customer_id });
+    } else {
+      // Abre uma nova comanda para o cliente (ou balcão)
+      const openRes = await openComanda(ctx, { customerId: part.customerId ?? null });
+      if (!openRes.success) {
+        if (openRes.reason === "customer_not_found") {
+          return { success: false, reason: "customer_not_found" };
+        }
+        // Se já tem comanda aberta, reusa essa comanda aberta!
+        if (openRes.reason === "already_has_open_comanda" && openRes.existingComandaId) {
+          comandaInfos.push({ id: openRes.existingComandaId, customerId: part.customerId ?? null });
+          continue;
+        }
+        return { success: false, reason: "comanda_not_found" };
+      }
+      comandaInfos.push({ id: openRes.comanda.id, customerId: openRes.comanda.customerId });
+    }
+  }
+
+  // Insere a marcação na grade (comanda_id = NULL → indica rateio via splits).
+  let bookingId: string;
+  try {
+    const bookingResult = await ctx.db.execute<{ id: string }>(
+      sql`INSERT INTO court_bookings
+            (tenant_id, court_id, court_time_slot_id, booking_date, start_time_hhmm,
+             end_time_hhmm, price_cents_at_booking, status, comanda_id, customer_id, is_monthly, created_by_user_id)
+          VALUES (${ctx.tenantId}, ${data.courtId}, ${slot.slotId}, ${data.date}, ${data.startTimeHHMM},
+                  ${slot.endTimeHHMM}, ${effectivePriceCents}, 'booked', NULL, NULL, ${data.isMonthly}, ${ctx.actorUserId})
+          RETURNING id`
+    );
+    bookingId = rows<{ id: string }>(bookingResult)[0].id;
+  } catch (err) {
+    if (isUniqueViolation(err)) return { success: false, reason: "double_booked" };
+    throw err;
+  }
+
+  // Divide o valor igualmente entre os N participantes.
+  const n = comandaInfos.length;
+  const baseShare = Math.floor(effectivePriceCents / n);
+  const remainder = effectivePriceCents - baseShare * n;
+
+  const splitIds: string[] = [];
+  for (let i = 0; i < comandaInfos.length; i++) {
+    const comanda = comandaInfos[i];
+    const shareCents = i === 0 ? baseShare + remainder : baseShare;
+
+    const splitResult = await ctx.db.execute<{ id: string }>(
+      sql`INSERT INTO court_booking_splits
+            (tenant_id, court_booking_id, comanda_id, customer_id, share_cents)
+          VALUES (${ctx.tenantId}, ${bookingId}, ${comanda.id}, ${comanda.customerId}, ${shareCents})
+          RETURNING id`
+    );
+    splitIds.push(rows<{ id: string }>(splitResult)[0].id);
+
+    // Insere a linha de comanda
+    await insertRentalLine(ctx, {
+      comandaId: comanda.id,
+      bookingId,
+      courtName: court.name,
+      startTimeHHMM: data.startTimeHHMM,
+      endTimeHHMM: slot.endTimeHHMM,
+      priceInCents: shareCents,
+    });
+  }
+
+  await writeAudit(ctx, "pdv.court_booking.split", {
+    bookingId,
+    splitIds,
+    courtId: data.courtId,
+    date: data.date,
+    startTimeHHMM: data.startTimeHHMM,
+    totalCents: effectivePriceCents,
+    participantCount: n,
+    isMonthly: data.isMonthly,
+  });
+
+  if (data.isMonthly) {
+    await reserveRecurringMonthlyDates(ctx, {
+      courtId: data.courtId,
+      startDate: data.date,
+      startTimeHHMM: data.startTimeHHMM,
+      customerId: null,
+    });
+  }
+
+  return { success: true, bookingId, splitIds };
+}
+

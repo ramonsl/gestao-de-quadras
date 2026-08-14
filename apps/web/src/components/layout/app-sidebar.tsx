@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Megaphone,
   Building2,
+  Printer,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -96,6 +97,9 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
           { href: "/admin/publicidade/anunciantes", label: "Anunciantes", icon: Building2 },
         ]
       : []),
+    ...(isAdmin || session.role === "gerente"
+      ? [{ href: "/admin/impressao", label: "Impressão Térmica", icon: Printer }]
+      : []),
   ];
 
   // Administração de Sistema
@@ -119,7 +123,7 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
           isCollapsed ? "justify-center px-0" : "px-2.5"
         } ${
           isActive
-            ? "bg-[var(--sidebar-hover)] text-white font-medium border-l-2 border-[var(--accent-bright)]"
+            ? "bg-[var(--accent-bright)] text-white font-medium"
             : "text-white/80 hover:bg-[var(--sidebar-hover)] hover:text-white"
         }`}
       >

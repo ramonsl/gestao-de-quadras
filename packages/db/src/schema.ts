@@ -680,6 +680,30 @@ export const advertisers = pgTable(
 );
 
 /**
+ * Configurações de impressão térmica da arena (CAD-07).
+ * Define tamanho do papel, modo de impressão automática e textos de cabeçalho/rodapé.
+ */
+export const tenantPrintConfigs = pgTable(
+  "tenant_print_configs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    /** '58mm' | '80mm' — padrão: '80mm'. */
+    paperSize: varchar("paper_size", { length: 5 }).notNull().default("80mm"),
+    autoPrintProductionTickets: boolean("auto_print_production_tickets").notNull().default(false),
+    /** Texto multiline exibido no cabeçalho dos comprovantes (ex.: nome, CNPJ). */
+    receiptHeader: text("receipt_header"),
+    /** Texto multiline exibido no rodapé dos comprovantes (ex.: "Obrigado!"). */
+    receiptFooter: text("receipt_footer"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantUnique: uniqueIndex("tenant_print_configs_tenant_unique").on(t.tenantId),
+  })
+);
+
+/**
  * Configurações do Programa de Pontos / Cashback (PTS-01 / PDV-08).
  * Define se o programa está ativo na arena, regras de acúmulo, taxa de resgate e limites.
  */
@@ -781,6 +805,7 @@ export const TENANT_SCOPED_TABLES = [
   "points_settings",
   "customer_points_balance",
   "customer_points_transactions",
+  "tenant_print_configs",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -849,4 +874,6 @@ export type CustomerPointsBalance = typeof customerPointsBalance.$inferSelect;
 export type NewCustomerPointsBalance = typeof customerPointsBalance.$inferInsert;
 export type CustomerPointsTransactions = typeof customerPointsTransactions.$inferSelect;
 export type NewCustomerPointsTransactions = typeof customerPointsTransactions.$inferInsert;
+export type TenantPrintConfig = typeof tenantPrintConfigs.$inferSelect;
+export type NewTenantPrintConfig = typeof tenantPrintConfigs.$inferInsert;
 

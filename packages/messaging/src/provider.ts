@@ -17,7 +17,14 @@ export interface SendMessageResult {
 
 export type MessagingProviderEvent =
   | { type: "statusChange"; tenantId: string; snapshot: WhatsAppConnectionSnapshot }
-  | { type: "permanentDisconnect"; tenantId: string };
+  | { type: "permanentDisconnect"; tenantId: string }
+  | {
+      type: "incomingMessage";
+      tenantId: string;
+      fromE164: string;
+      text: string;
+      baileysMessageId: string;
+    };
 
 export type MessagingProviderEventHandler = (event: MessagingProviderEvent) => void;
 

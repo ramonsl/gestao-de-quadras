@@ -4,13 +4,16 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ComandaWithItems, ComandaItemView, ComandaPaymentView } from "@gestao-de-quadras/core/pdv";
-import type { Product } from "@gestao-de-quadras/db/schema";
+import type { ClassBalanceView } from "@gestao-de-quadras/core/classes/class-balance.service";
+import type { ClassPackage, Product } from "@gestao-de-quadras/db/schema";
 import type { PrintConfigView } from "@gestao-de-quadras/core/print";
 import { formatCentsToBRL } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PrintTicketToggle } from "./print-ticket-toggle";
 import { ProductSelectorGrid } from "./product-selector-grid";
+import { ClassPackageSelector } from "./class-package-selector";
+import { ClassBalanceSection } from "./class-balance-section";
 import { CloseComandaDialog } from "./close-comanda-dialog";
 import { CancelItemDialog } from "./cancel-item-dialog";
 import { ReopenComandaDialog } from "./reopen-comanda-dialog";
@@ -22,17 +25,21 @@ import {
 import type { CustomerSearchResult } from "../../_actions/search-customers.action";
 import { linkCustomerAction } from "../_actions/link-customer.action";
 import { addItemsAction } from "../_actions/add-items.action";
-import { AlertTriangle, CreditCard, Printer, RotateCcw, Trash2 } from "lucide-react";
+import { addClassPackageItemAction } from "../_actions/add-class-package.action";
 import { ElapsedTime } from "../../_components/elapsed-time";
 import { SettleDebitDialog } from "../../_components/settle-debit-dialog";
 import {
   getCustomerDebitSummaryAction,
   transferComandaToCustomerDebitAction,
 } from "../../_actions/customer-debit.actions";
+import { ArrowLeft, TriangleAlert, CreditCard, RefreshCw, Printer, X, ShoppingCart, GraduationCap, Trash2, Plus } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface ComandaWorkspaceProps {
   comanda: ComandaWithItems;
   products: Product[];
+  classPackages: ClassPackage[];
+  activeBalances: ClassBalanceView[];
   userRole?: string;
   printConfig?: PrintConfigView;
 }
@@ -50,7 +57,14 @@ const PAYMENT_LABELS: Record<string, string> = {
   pontos: "Pontos / Cashback",
 };
 
-export function ComandaWorkspace({ comanda: initialComanda, products, userRole, printConfig }: ComandaWorkspaceProps) {
+export function ComandaWorkspace({
+  comanda: initialComanda,
+  products,
+  classPackages,
+  activeBalances,
+  userRole,
+  printConfig,
+}: ComandaWorkspaceProps) {
   const router = useRouter();
   const comandaId = initialComanda.id;
 
@@ -162,6 +176,36 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
     setPendingCart((prev) => prev.filter((item) => item.product.id !== productId));
   }
 
+  async function handleSelectPackage(pkg: ClassPackage) {
+    if (isClosed) return;
+    if (!customerId) {
+      setErrorMessage("Pacotes de aulas só podem ser vendidos em comandas com cliente identificado.");
+      return;
+    }
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const result = await addClassPackageItemAction(comandaId, pkg.id, 1);
+      if (!result.success) {
+        const msgs: Record<string, string> = {
+          comanda_requires_customer: "Pacotes de aulas exigem cliente identificado na comanda.",
+          class_package_not_found: "Pacote não encontrado.",
+          class_package_inactive: "Este pacote de aulas não está mais ativo.",
+          comanda_closed: "A comanda já foi fechada.",
+        };
+        setErrorMessage(msgs[result.reason] ?? "Erro ao adicionar pacote.");
+        return;
+      }
+      setTotalCents(result.comandaTotalCents);
+      router.refresh();
+      setIsAddingItems(false);
+    } catch {
+      setErrorMessage("Erro ao adicionar pacote de aulas. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   const pendingTotalCents = pendingCart.reduce(
     (sum, item) => sum + item.product.salePriceCents * item.quantity,
     0
@@ -243,16 +287,7 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
           href="/pdv"
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-[var(--border)] rounded-[var(--radius-button)] text-xs font-bold text-[var(--text-1)] hover:bg-gray-50 hover:border-[var(--accent)] shadow-sm transition-colors active:opacity-80"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2.5}
-            stroke="currentColor"
-            className="w-4 h-4 text-[var(--accent)]"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-          </svg>
+          <ArrowLeft className="w-4 h-4 text-[var(--accent)]" />
           <span>Voltar para a Grade de Comandas</span>
         </Link>
       </div>
@@ -261,7 +296,7 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
       {pendingDebitCents > 0 && customerId && (
         <div className="p-3 bg-amber-50 border border-amber-300 rounded-[var(--radius-card)] flex flex-wrap items-center justify-between gap-3 text-amber-950 shadow-sm">
           <div className="flex items-center gap-2 text-xs">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600" />
             <div>
               <p className="font-bold">Cliente com Saldo Devedor Pendente</p>
               <p className="text-[11px] text-amber-800">
@@ -272,9 +307,9 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
           <Button
             type="button"
             onClick={() => setSettleDebitOpen(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8"
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 inline-flex items-center gap-1.5"
           >
-            <CreditCard className="w-4 h-4" /> Quitar Débito Agora
+            <CreditCard className="h-3.5 w-3.5" /> Quitar Débito Agora
           </Button>
         </div>
       )}
@@ -320,19 +355,10 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
                 setErrorMessage(null);
                 setIsAddingItems(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-button)] text-white font-semibold text-sm shadow-sm active:opacity-80"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-button)] text-white font-semibold text-sm shadow-sm transition-colors active:opacity-80"
               style={{ backgroundColor: "var(--accent)" }}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-4 h-4"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
+              <Plus className="w-4 h-4" />
               <span>Lançar Itens</span>
             </button>
           )}
@@ -344,7 +370,7 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
                 setErrorMessage(null);
                 setIsCloseDialogOpen(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-button)] text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 shadow-sm active:opacity-80"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-button)] text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors active:opacity-80"
             >
               <span>Encerrar & Pagar</span>
             </button>
@@ -356,17 +382,17 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
                 type="button"
                 variant="outline"
                 onClick={() => setIsReopenOpen(true)}
-                className="font-semibold text-xs gap-1.5 border-amber-300 text-amber-900 bg-amber-50/50 hover:bg-amber-100"
+                className="font-semibold text-xs gap-1.5 border-amber-300 text-amber-900 bg-amber-50/50 hover:bg-amber-100 inline-flex items-center"
               >
-                <RotateCcw className="w-4 h-4" /> Estornar / Reabrir Comanda
+                <RefreshCw className="h-3.5 w-3.5" /> Estornar / Reabrir Comanda
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => window.print()}
-                className="font-semibold text-xs gap-1.5"
+                className="font-semibold text-xs gap-1.5 inline-flex items-center"
               >
-                <Printer className="w-4 h-4" /> Imprimir Extrato
+                <Printer className="h-3.5 w-3.5" /> Imprimir Extrato
               </Button>
             </div>
           )}
@@ -398,16 +424,47 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
                 setPendingCart([]);
                 setIsAddingItems(false);
               }}
-              className="text-[var(--danger)] border-[var(--danger-border)] hover:bg-[var(--danger-bg)]"
+              className="text-[var(--danger)] border-[var(--danger-border)] hover:bg-[var(--danger-bg)] inline-flex items-center gap-1.5"
             >
-              ✖ Fechar / Voltar
+              <X className="h-3.5 w-3.5" /> Fechar / Voltar
             </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
             {/* Esquerda: Catálogo por Abas */}
-            <div className="lg:col-span-2">
-              <ProductSelectorGrid products={products} onSelectProduct={handleSelectProduct} />
+            <div className="lg:col-span-2 space-y-3">
+              <Tabs defaultValue="produtos">
+                <TabsList>
+                  <TabsTrigger value="produtos">
+                    <ShoppingCart className="h-3 w-3 mr-1.5 inline" />
+                    Produtos
+                  </TabsTrigger>
+                  <TabsTrigger value="pacotes">
+                    <GraduationCap className="h-3 w-3 mr-1.5 inline" />
+                    Pacotes de Aulas
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="produtos">
+                  <ProductSelectorGrid products={products} onSelectProduct={handleSelectProduct} />
+                </TabsContent>
+                <TabsContent value="pacotes">
+                  <div className="bg-white border border-[var(--border)] rounded-[var(--radius-card)] p-4">
+                    {!customerId && (
+                      <div
+                        className="mb-3 px-3 py-2 rounded-[var(--radius-control)] flex items-center gap-2 text-xs font-medium"
+                        style={{ backgroundColor: "var(--warning-bg)", border: "1px solid var(--warning-border)", color: "var(--warning)" }}
+                      >
+                        <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                        Vincule um cliente à comanda para poder vender pacotes de aulas.
+                      </div>
+                    )}
+                    <ClassPackageSelector
+                      classPackages={classPackages}
+                      onSelectPackage={(pkg) => void handleSelectPackage(pkg)}
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
 
             {/* Direita: Carrinho Lateral Temporário */}
@@ -461,10 +518,10 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(item.product.id)}
-                        className="text-[var(--text-3)] hover:text-[var(--danger)] ml-1"
+                        className="text-[var(--text-3)] hover:text-[var(--danger)] ml-1 p-0.5"
                         title="Remover"
                       >
-                        ✕
+                        <X className="h-3 w-3" />
                       </button>
                     </div>
                   ))}
@@ -554,10 +611,10 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
                           <button
                             type="button"
                             onClick={() => setCancellingItem(item)}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                            className="p-1 text-[var(--text-3)] hover:text-[var(--danger)] transition-colors"
                             title="Cancelar este item"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </td>
                       )}
@@ -574,6 +631,11 @@ export function ComandaWorkspace({ comanda: initialComanda, products, userRole, 
               </span>
             </div>
           </div>
+
+          {/* Saldo de Aulas do Cliente (PDV-06) */}
+          {customerId && activeBalances.length > 0 && !isAddingItems && (
+            <ClassBalanceSection initialBalances={activeBalances} />
+          )}
 
           {/* Tabela de Pagamentos (Se Fechada) */}
           {isClosed && payments.length > 0 && (

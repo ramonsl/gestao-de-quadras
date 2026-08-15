@@ -41,21 +41,33 @@ export class BaileysMessagingProvider implements MessagingProvider {
     return this.pool.getStatus({ db: this.db, tenantId: ref.tenantId });
   }
 
-  /** Reservado para WPP-02/04 — envio de mensagens fora do escopo da WPP-01. */
-  async sendMessage(_input: SendMessageInput): Promise<SendMessageResult> {
-    return { success: false, reason: "not_implemented" };
+  async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
+    const session = this.pool.getSession(input.tenantId);
+    if (!session) return { success: false, reason: "not_connected" };
+    const jid = input.toE164.replace("+", "") + "@s.whatsapp.net";
+    try {
+      const result = await session.socket.sendMessage(jid, { text: input.text });
+      return { success: true, providerMessageId: result?.key?.id ?? undefined };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return { success: false, reason };
+    }
   }
 
   onEvent(handler: MessagingProviderEventHandler): () => void {
     return this.pool.onEvent((event) => {
-      const statusChange: MessagingProviderEvent = {
-        type: "statusChange",
-        tenantId: event.tenantId,
-        snapshot: event.snapshot,
-      };
-      handler(statusChange);
+      handler({ type: "statusChange", tenantId: event.tenantId, snapshot: event.snapshot });
       if (event.permanentDisconnect) {
         handler({ type: "permanentDisconnect", tenantId: event.tenantId });
+      }
+      if (event.incomingMessage) {
+        handler({
+          type: "incomingMessage",
+          tenantId: event.tenantId,
+          fromE164: event.incomingMessage.fromE164,
+          text: event.incomingMessage.text,
+          baileysMessageId: event.incomingMessage.baileysMessageId,
+        });
       }
     });
   }

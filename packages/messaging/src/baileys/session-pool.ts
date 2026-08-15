@@ -15,6 +15,11 @@ export interface SessionPoolEvent {
   tenantId: string;
   snapshot: WhatsAppConnectionSnapshot;
   permanentDisconnect?: boolean;
+  incomingMessage?: {
+    fromE164: string;
+    text: string;
+    baileysMessageId: string;
+  };
 }
 
 export type SessionPoolEventHandler = (event: SessionPoolEvent) => void;
@@ -44,7 +49,7 @@ function backoffDelayMs(attempt: number): number {
   return Math.min(30_000, 1_000 * 2 ** Math.min(attempt, 5));
 }
 
-interface ActiveSession {
+export interface ActiveSession {
   socket: WASocket;
 }
 
@@ -129,6 +134,32 @@ export class WhatsAppSessionPool {
     socket.ev.on("creds.update", saveCreds);
     socket.ev.on("connection.update", (update) => {
       void this.handleConnectionUpdate(ref, generation, update);
+    });
+    socket.ev.on("messages.upsert", ({ messages, type }) => {
+      if (type !== "notify") return;
+      for (const msg of messages) {
+        if (msg.key.fromMe) continue;
+        if (!msg.message) continue;
+        const jid = msg.key.remoteJid;
+        if (!jid || jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) continue;
+        const text =
+          msg.message.conversation ??
+          msg.message.extendedTextMessage?.text ??
+          "";
+        if (!text.trim()) continue;
+        const fromE164 = "+" + jid.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+        this.emit({
+          tenantId: ref.tenantId,
+          snapshot: {
+            status: "connected",
+            qrCode: null,
+            phoneNumber: null,
+            reconnectAttempts: 0,
+            updatedAt: new Date().toISOString(),
+          },
+          incomingMessage: { fromE164, text, baileysMessageId: msg.key.id ?? "" },
+        });
+      }
     });
   }
 
@@ -220,5 +251,9 @@ export class WhatsAppSessionPool {
   async getStatus(ref: TenantRef): Promise<WhatsAppConnectionSnapshot> {
     const record = await getOrCreateConnection(ref);
     return toSnapshot(record);
+  }
+
+  getSession(tenantId: string): ActiveSession | undefined {
+    return this.sessions.get(tenantId);
   }
 }

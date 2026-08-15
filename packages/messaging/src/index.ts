@@ -11,3 +11,4 @@ export * from "./provider";
 export * from "./control-queue";
 export * from "./events";
 export * from "./fakes/fake-messaging-provider";
+export * from "./notification-queue";

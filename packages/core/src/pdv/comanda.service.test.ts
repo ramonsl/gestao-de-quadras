@@ -33,14 +33,24 @@ vi.mock("../points/points.service", () => ({
   redeemPoints: (...args: unknown[]) => redeemPointsMock(...args),
 }));
 
-const { openComanda, addItemToComanda, getComandaWithItems, listOpenComandas, linkCustomerToComanda, closeComanda, cancelComandaItem } =
-  await import("./comanda.service");
+const {
+  openComanda,
+  addItemToComanda,
+  addClassPackageItemToComanda,
+  getComandaWithItems,
+  listOpenComandas,
+  linkCustomerToComanda,
+  closeComanda,
+  cancelComandaItem,
+} = await import("./comanda.service");
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 const ACTOR_ID = "22222222-2222-4222-8222-222222222222";
 const CUSTOMER_ID = "33333333-3333-4333-8333-333333333333";
 const COMANDA_ID = "44444444-4444-4444-8444-444444444444";
 const PRODUCT_ID = "55555555-5555-4555-8555-555555555555";
+const PKG_ID = "66666666-6666-4666-8666-666666666661";
+const GLOBAL_CUSTOMER_ID = "77777777-7777-4777-8777-777777777777";
 
 /** Assertion helper: estreita um `{success:true|false}` para o ramo `true`. */
 function assertSuccess<T extends { success: boolean }>(
@@ -104,6 +114,32 @@ function makeItemRow(
     product_name_at_sale: "Água Mineral 500ml",
     quantity: 1,
     unit_price_cents_at_sale: 500,
+    operator_user_id: ACTOR_ID,
+    created_at: new Date("2026-07-22T12:05:00Z"),
+    ...overrides,
+  };
+}
+
+function makeClassPackageItemRow(
+  overrides: Partial<{
+    id: string;
+    item_type: string;
+    class_package_id: string;
+    product_name_at_sale: string;
+    quantity: number;
+    unit_price_cents_at_sale: number;
+  }> = {}
+) {
+  return {
+    id: "item-pkg-1",
+    tenant_id: TENANT_ID,
+    comanda_id: COMANDA_ID,
+    item_type: "class_package",
+    product_id: null,
+    class_package_id: PKG_ID,
+    product_name_at_sale: "Mensal 8 Aulas",
+    quantity: 1,
+    unit_price_cents_at_sale: 32000,
     operator_user_id: ACTOR_ID,
     created_at: new Date("2026-07-22T12:05:00Z"),
     ...overrides,
@@ -561,6 +597,133 @@ describe("linkCustomerToComanda", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// PDV-06 — Venda de Pacotes de Aulas
+// ---------------------------------------------------------------------------
+
+describe("addClassPackageItemToComanda (PDV-06)", () => {
+  const pkgRow = (overrides: Record<string, unknown> = {}) => ({
+    id: PKG_ID,
+    name: "Mensal 8 Aulas",
+    total_class_count: 8,
+    price_in_cents: 32000,
+    is_active: true,
+    ...overrides,
+  });
+
+  it("AC2: retorna comanda_requires_customer para comanda sem cliente vinculado", async () => {
+    // Uma comanda balcão (customer_id = null) não pode receber pacotes de aula.
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ customer_id: null, status: "open" })], // SELECT comanda → balcão
+    ]);
+
+    const result = await addClassPackageItemToComanda(ctx, {
+      comandaId: COMANDA_ID,
+      classPackageId: PKG_ID,
+      quantity: 1,
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("comanda_requires_customer");
+  });
+
+  it("AC10/IDOR: retorna class_package_not_found quando o pacote pertence a outro tenant", async () => {
+    // A query de validação usa WHERE id = ... AND tenant_id = ctx.tenantId.
+    // Um classPackageId de outro tenant retorna vazio → class_package_not_found.
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })], // SELECT comanda OK
+      [],                                                               // SELECT class_package → vazio (outro tenant)
+    ]);
+
+    const result = await addClassPackageItemToComanda(ctx, {
+      comandaId: COMANDA_ID,
+      classPackageId: PKG_ID,
+      quantity: 1,
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("class_package_not_found");
+  });
+
+  it("AC1: retorna class_package_inactive para pacote com is_active = false", async () => {
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })],
+      [pkgRow({ is_active: false })], // pacote inativo
+    ]);
+
+    const result = await addClassPackageItemToComanda(ctx, {
+      comandaId: COMANDA_ID,
+      classPackageId: PKG_ID,
+      quantity: 1,
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("class_package_inactive");
+  });
+
+  it("AC4: grava item_type='class_package', class_package_id e snapshot imutável de nome/preço", async () => {
+    // Regra 10 (CLAUDE.md): nome e preço gravados no momento do lançamento,
+    // nunca recalculados a partir do catálogo depois.
+    const ctx = mkQueueCtx([
+      [makeComandaRow({ customer_id: CUSTOMER_ID, status: "open" })], // SELECT comanda
+      [pkgRow()],                                                       // SELECT class_package
+      [makeClassPackageItemRow()],                                       // INSERT comanda_items RETURNING
+      [{ total: "32000" }],                                             // SELECT SUM total
+    ]);
+
+    const result = await addClassPackageItemToComanda(ctx, {
+      comandaId: COMANDA_ID,
+      classPackageId: PKG_ID,
+      quantity: 1,
+    });
+
+    assertSuccess(result);
+    expect(result.item.itemType).toBe("class_package");
+    expect(result.item.classPackageId).toBe(PKG_ID);
+    expect(result.item.productId).toBeNull();
+    // Snapshot imutável: nome e preço do pacote no momento do lançamento.
+    expect(result.item.productNameAtSale).toBe("Mensal 8 Aulas");
+    expect(result.item.unitPriceCentsAtSale).toBe(32000);
+    expect(result.item.quantity).toBe(1);
+    expect(result.item.lineTotalCents).toBe(32000);
+    expect(result.comandaTotalCents).toBe(32000);
+  });
+
+  it("isolamento: retorna comanda_not_found quando a comanda não existe ou pertence a outro tenant", async () => {
+    const ctx = mkQueueCtx([[]]); // SELECT comanda filtrado por tenant_id → vazio
+
+    const result = await addClassPackageItemToComanda(ctx, {
+      comandaId: COMANDA_ID,
+      classPackageId: PKG_ID,
+      quantity: 1,
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("comanda_not_found");
+  });
+
+  it("retorna comanda_closed para comanda já encerrada", async () => {
+    const ctx = mkQueueCtx([[makeComandaRow({ customer_id: CUSTOMER_ID, status: "closed" })]]);
+
+    const result = await addClassPackageItemToComanda(ctx, {
+      comandaId: COMANDA_ID,
+      classPackageId: PKG_ID,
+      quantity: 1,
+    });
+
+    assertFailure(result);
+    expect(result.reason).toBe("comanda_closed");
+  });
+
+  it("exige ctx.actorUserId", async () => {
+    const ctx = mkQueueCtx([], { actorUserId: undefined });
+
+    await expect(
+      addClassPackageItemToComanda(ctx, { comandaId: COMANDA_ID, classPackageId: PKG_ID, quantity: 1 })
+    ).rejects.toThrow(/actorUserId/i);
+  });
+});
+
 describe("closeComanda (PDV-07)", () => {
   function makePaymentRow(overrides: Partial<{ id: string; amount_cents: number; change_cents: number }> = {}) {
     return {
@@ -774,6 +937,9 @@ describe("closeComanda (PDV-07)", () => {
         [makePaymentRow({ payment_method: "pontos", amount_cents: 2000 })], // 5. INSERT payment 1
         [makePaymentRow({ payment_method: "pix", amount_cents: 3000 })], // 6. INSERT payment 2
         [{}], // 7. INSERT audit_log
+        // creditClassPackageBalances (PDV-06): comanda tem customer mas nenhum item class_package.
+        [{ global_customer_id: GLOBAL_CUSTOMER_ID }], // 8. SELECT global_customer_id
+        [], // 9. SELECT comanda_items WHERE item_type='class_package' → vazio (sem pacotes)
       ]);
 
       const result = await closeComanda(ctx, {
@@ -784,6 +950,100 @@ describe("closeComanda (PDV-07)", () => {
       assertSuccess(result);
       expect(redeemPointsMock).toHaveBeenCalledWith(ctx, CUSTOMER_ID, 2000, COMANDA_ID);
       expect(result.comanda.status).toBe("closed");
+    });
+  });
+
+  describe("PDV-06 AC3 — Crédito de saldo de aulas no fechamento", () => {
+    it("cria registro em student_class_balance ao fechar comanda com item class_package", async () => {
+      /**
+       * Sequência de chamadas ao banco dentro de `closeComanda`:
+       *   1. SELECT comanda (aberta, com cliente)
+       *   2. SELECT SUM(qty * price) FROM comanda_items  → total R$ 320,00
+       *   3. UPDATE comanda SET status='closed' RETURNING
+       *   4. SELECT cash_session (getCurrentOpenCashSession) → null
+       *   5. INSERT comanda_payments RETURNING
+       *   6. INSERT audit_logs
+       *   ─ creditClassPackageBalances ─
+       *   7. SELECT global_customer_id FROM customers
+       *   8. SELECT comanda_items WHERE item_type='class_package'
+       *   9. INSERT student_class_balance   ← este é o AC3
+       *
+       * A presença da entrada 9 na fila e a ausência de erros "fila esgotada"
+       * provam que o INSERT foi executado. (Erros dentro de creditClassPackageBalances
+       * são swallowed pelo .catch, portanto o contador customizado garante a chamada.)
+       */
+      let studentClassBalanceCalled = false;
+      let callCount = 0;
+
+      const responses: unknown[][] = [
+        [makeComandaRow({ status: "open", customer_id: CUSTOMER_ID })], // 1
+        [{ total: "32000" }],                                            // 2
+        [makeComandaRow({ status: "closed", customer_id: CUSTOMER_ID })], // 3
+        [],                                                               // 4 cash session
+        [makePaymentRow({ amount_cents: 32000 })],                        // 5
+        [{}],                                                             // 6 audit
+        [{ global_customer_id: GLOBAL_CUSTOMER_ID }],                    // 7
+        [{ class_package_id: PKG_ID, quantity: 1, total_class_count: 8 }], // 8
+        [{}],                                                             // 9 INSERT student_class_balance
+      ];
+
+      const ctx: TenantContext = {
+        db: {
+          execute: async () => {
+            callCount += 1;
+            if (callCount === 9) studentClassBalanceCalled = true;
+            const resp = responses.shift();
+            return { rows: resp ?? [] };
+          },
+        } as unknown as TenantContext["db"],
+        tenantId: TENANT_ID,
+        actorUserId: ACTOR_ID,
+      };
+
+      const result = await closeComanda(ctx, {
+        comandaId: COMANDA_ID,
+        discountCents: 0,
+        payments: [{ paymentMethod: "pix", amountCents: 32000 }],
+      });
+
+      assertSuccess(result);
+      expect(studentClassBalanceCalled).toBe(true);
+    });
+
+    it("não cria saldo de aulas quando a comanda não tem cliente (balcão)", async () => {
+      // creditClassPackageBalances retorna imediatamente se customer_id === null.
+      // Neste caso, apenas 6 chamadas ao banco são feitas (sem as de creditClassPackageBalances).
+      let callCount = 0;
+      const responses: unknown[][] = [
+        [makeComandaRow({ status: "open", customer_id: null })], // 1 comanda balcão
+        [{ total: "32000" }],                                     // 2
+        [makeComandaRow({ status: "closed", customer_id: null })], // 3
+        [],                                                        // 4 cash session
+        [makePaymentRow({ amount_cents: 32000 })],                 // 5
+        [{}],                                                      // 6 audit
+      ];
+
+      const ctx: TenantContext = {
+        db: {
+          execute: async () => {
+            callCount += 1;
+            const resp = responses.shift();
+            return { rows: resp ?? [] };
+          },
+        } as unknown as TenantContext["db"],
+        tenantId: TENANT_ID,
+        actorUserId: ACTOR_ID,
+      };
+
+      const result = await closeComanda(ctx, {
+        comandaId: COMANDA_ID,
+        discountCents: 0,
+        payments: [{ paymentMethod: "pix", amountCents: 32000 }],
+      });
+
+      assertSuccess(result);
+      // Exatamente 6 chamadas: sem SELECT global_customer_id nem INSERT student_class_balance.
+      expect(callCount).toBe(6);
     });
   });
 

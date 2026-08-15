@@ -2,6 +2,7 @@
 
 import { requireModule } from "@/lib/session";
 import { addItemToComanda } from "@gestao-de-quadras/core/pdv";
+import { getNotificationQueue } from "@/lib/queues";
 
 export interface BatchItemInput {
   productId: string;
@@ -24,11 +25,11 @@ export async function addItemsAction(
 
   let lastTotalCents = 0;
   for (const item of items) {
-    const res = await addItemToComanda(ctx, {
-      comandaId,
-      productId: item.productId,
-      quantity: item.quantity,
-    });
+    const res = await addItemToComanda(
+      ctx,
+      { comandaId, productId: item.productId, quantity: item.quantity },
+      getNotificationQueue()
+    );
     if (!res.success) {
       return {
         success: false,

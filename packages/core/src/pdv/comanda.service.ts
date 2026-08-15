@@ -6,6 +6,10 @@ import { getCustomerById } from "../customers/customer.service";
 import { getProductById } from "../product/product.service";
 import { getCurrentOpenCashSession } from "./cash-session.service";
 import { getCustomerPointsSummary, redeemPoints } from "../points/points.service";
+import {
+  enqueueComandaNotificationIfEligible,
+  type NotificationQueuePort,
+} from "../whatsapp/notification.service";
 
 export interface Comanda {
   id: string;
@@ -23,8 +27,13 @@ export interface ComandaItemView {
   id: string;
   tenantId: string;
   comandaId: string;
-  productId: string;
-  /** Snapshot imutável do nome do produto no momento do lançamento. */
+  /** 'product' | 'court_rental' | 'class_package' */
+  itemType: string;
+  /** null para class_package e court_rental */
+  productId: string | null;
+  /** null para product e court_rental */
+  classPackageId: string | null;
+  /** Snapshot imutável do nome do produto/pacote no momento do lançamento. */
   productNameAtSale: string;
   quantity: number;
   /** Snapshot imutável do preço unitário (centavos) — regra 10, CLAUDE.md. */
@@ -53,6 +62,8 @@ export interface ComandaWithItems extends Comanda {
   /** null quando balcão OU quando o cliente vinculado não existe mais (sem FK). */
   customerName: string | null;
   customerWhatsapp: string | null;
+  /** global_customer_id do cliente vinculado — null para balcão (PDV-06). */
+  globalCustomerId: string | null;
 }
 
 /** Item do painel de comandas abertas (PDV-04). */
@@ -82,7 +93,9 @@ type ComandaItemRow = {
   id: string;
   tenant_id: string;
   comanda_id: string;
-  product_id: string;
+  item_type: string;
+  product_id: string | null;
+  class_package_id: string | null;
   product_name_at_sale: string;
   quantity: number;
   unit_price_cents_at_sale: number;
@@ -103,7 +116,7 @@ type ComandaPaymentRow = {
 };
 
 const COMANDA_COLS = sql`id, tenant_id, customer_id, status, opened_by_user_id, created_at, updated_at`;
-const ITEM_COLS = sql`id, tenant_id, comanda_id, product_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id, created_at`;
+const ITEM_COLS = sql`id, tenant_id, comanda_id, item_type, product_id, class_package_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id, created_at`;
 
 function toComanda(row: ComandaRow): Comanda {
   return {
@@ -122,7 +135,9 @@ function toItemView(row: ComandaItemRow): ComandaItemView {
     id: row.id,
     tenantId: row.tenant_id,
     comandaId: row.comanda_id,
+    itemType: row.item_type ?? "product",
     productId: row.product_id,
+    classPackageId: row.class_package_id,
     productNameAtSale: row.product_name_at_sale,
     quantity: row.quantity,
     unitPriceCentsAtSale: row.unit_price_cents_at_sale,
@@ -220,7 +235,8 @@ export type AddComandaItemResult =
 
 export async function addItemToComanda(
   ctx: TenantContext,
-  input: z.infer<typeof AddComandaItemInputSchema>
+  input: z.infer<typeof AddComandaItemInputSchema>,
+  notificationQueue?: NotificationQueuePort
 ): Promise<AddComandaItemResult> {
   assertTenantId(ctx.tenantId);
   if (!ctx.actorUserId) {
@@ -243,8 +259,8 @@ export async function addItemToComanda(
   // (CAD-02 AC3 aponta o débito para o FECHAMENTO da comanda — PDV-07).
   const insertResult = await ctx.db.execute<ComandaItemRow>(
     sql`INSERT INTO comanda_items
-          (tenant_id, comanda_id, product_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id)
-        VALUES (${ctx.tenantId}, ${data.comandaId}, ${data.productId}, ${product.name}, ${data.quantity},
+          (tenant_id, comanda_id, item_type, product_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id)
+        VALUES (${ctx.tenantId}, ${data.comandaId}, 'product', ${data.productId}, ${product.name}, ${data.quantity},
                 ${product.salePriceCents}, ${ctx.actorUserId})
         RETURNING ${ITEM_COLS}`
   );
@@ -256,11 +272,88 @@ export async function addItemToComanda(
   );
   const comandaTotalCents = Number(rows<{ total: string | null }>(totalResult)[0]?.total ?? 0);
 
-  // Ponto de extensão (WPP-02/WPP-04, fora desta fase): quando a fila de
-  // notificação existir, aqui entra a checagem de opt-in do cliente (via
-  // customer_opt_in_lgpd) + comanda identificada + enfileiramento em
-  // notification.queue. Nenhuma implementação real ainda (regra 4, CLAUDE.md:
-  // mensagens só saem pela fila, nunca síncronas no request).
+  if (notificationQueue && comandaRow.customer_id) {
+    void enqueueComandaNotificationIfEligible(
+      ctx,
+      { comandaId: data.comandaId, customerId: comandaRow.customer_id },
+      notificationQueue
+    ).catch(() => undefined);
+  }
+
+  return { success: true, item, comandaTotalCents };
+}
+
+// --- Lançar pacote de aulas (PDV-06) -----------------------------------------
+
+export const AddClassPackageItemInputSchema = z.object({
+  comandaId: z.string().uuid(),
+  classPackageId: z.string().uuid(),
+  quantity: z.number().int().positive().max(99),
+});
+
+export type AddClassPackageItemResult =
+  | { success: true; item: ComandaItemView; comandaTotalCents: number }
+  | {
+      success: false;
+      reason:
+        | "comanda_not_found"
+        | "comanda_closed"
+        | "comanda_requires_customer"
+        | "class_package_not_found"
+        | "class_package_inactive";
+    };
+
+export async function addClassPackageItemToComanda(
+  ctx: TenantContext,
+  input: z.infer<typeof AddClassPackageItemInputSchema>
+): Promise<AddClassPackageItemResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("addClassPackageItemToComanda exige ctx.actorUserId.");
+  }
+  const data = AddClassPackageItemInputSchema.parse(input);
+
+  const comandaResult = await ctx.db.execute<ComandaRow>(
+    sql`SELECT ${COMANDA_COLS} FROM comandas WHERE id = ${data.comandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const comandaRow = rows<ComandaRow>(comandaResult)[0];
+  if (!comandaRow) return { success: false, reason: "comanda_not_found" };
+  if (comandaRow.status !== "open") return { success: false, reason: "comanda_closed" };
+  if (!comandaRow.customer_id) return { success: false, reason: "comanda_requires_customer" };
+
+  // IDOR guard: valida classPackageId dentro do tenant
+  const pkgResult = await ctx.db.execute<{
+    id: string;
+    name: string;
+    total_class_count: number;
+    price_in_cents: number;
+    is_active: boolean;
+  }>(
+    sql`SELECT id, name, total_class_count, price_in_cents, is_active
+        FROM class_packages
+        WHERE id = ${data.classPackageId} AND tenant_id = ${ctx.tenantId}
+        LIMIT 1`
+  );
+  const pkg = rows<{ id: string; name: string; total_class_count: number; price_in_cents: number; is_active: boolean }>(
+    pkgResult
+  )[0];
+  if (!pkg) return { success: false, reason: "class_package_not_found" };
+  if (!pkg.is_active) return { success: false, reason: "class_package_inactive" };
+
+  const insertResult = await ctx.db.execute<ComandaItemRow>(
+    sql`INSERT INTO comanda_items
+          (tenant_id, comanda_id, item_type, class_package_id, class_count_at_sale, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id)
+        VALUES (${ctx.tenantId}, ${data.comandaId}, 'class_package', ${data.classPackageId},
+                ${pkg.total_class_count}, ${pkg.name}, ${data.quantity}, ${pkg.price_in_cents}, ${ctx.actorUserId})
+        RETURNING ${ITEM_COLS}`
+  );
+  const item = toItemView(rows<ComandaItemRow>(insertResult)[0]);
+
+  const totalResult = await ctx.db.execute<{ total: string | null }>(
+    sql`SELECT COALESCE(SUM(quantity * unit_price_cents_at_sale), 0) AS total
+        FROM comanda_items WHERE tenant_id = ${ctx.tenantId} AND comanda_id = ${data.comandaId}`
+  );
+  const comandaTotalCents = Number(rows<{ total: string | null }>(totalResult)[0]?.total ?? 0);
 
   return { success: true, item, comandaTotalCents };
 }
@@ -277,16 +370,17 @@ export async function getComandaWithItems(
   if (!z.string().uuid().safeParse(comandaId).success) return null;
 
   const comandaResult = await ctx.db.execute<
-    ComandaRow & { customer_name: string | null; customer_whatsapp: string | null }
+    ComandaRow & { customer_name: string | null; customer_whatsapp: string | null; global_customer_id: string | null }
   >(
     sql`SELECT c.id, c.tenant_id, c.customer_id, c.status, c.opened_by_user_id, c.created_at, c.updated_at,
-               cu.name AS customer_name, cu.whatsapp AS customer_whatsapp
+               cu.name AS customer_name, cu.whatsapp AS customer_whatsapp,
+               cu.global_customer_id AS global_customer_id
         FROM comandas c
         LEFT JOIN customers cu ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id
         WHERE c.id = ${comandaId} AND c.tenant_id = ${ctx.tenantId}
         LIMIT 1`
   );
-  const comandaRow = rows<ComandaRow & { customer_name: string | null; customer_whatsapp: string | null }>(
+  const comandaRow = rows<ComandaRow & { customer_name: string | null; customer_whatsapp: string | null; global_customer_id: string | null }>(
     comandaResult
   )[0];
   if (!comandaRow) return null;
@@ -314,6 +408,7 @@ export async function getComandaWithItems(
     totalCents,
     customerName: comandaRow.customer_name,
     customerWhatsapp: comandaRow.customer_whatsapp,
+    globalCustomerId: comandaRow.global_customer_id,
   };
 }
 
@@ -610,7 +705,58 @@ export async function closeComanda(
     totalChangeCents,
   });
 
+  // PDV-06: creditar saldo de aulas para itens class_package desta comanda.
+  // Erro não reverte o pagamento — é logado para reconciliação manual.
+  await creditClassPackageBalances(ctx, data.comandaId, comandaRow.customer_id).catch((err) => {
+    console.error("[pdv] creditClassPackageBalances falhou para comanda", data.comandaId, err);
+  });
+
   return { success: true, comanda, payments: paymentViews, totalChangeCents };
+}
+
+// --- Crédito de saldo de aulas ao fechar comanda (PDV-06) -------------------
+
+async function creditClassPackageBalances(
+  ctx: TenantContext,
+  comandaId: string,
+  customerId: string | null
+): Promise<void> {
+  if (!customerId) return;
+
+  // Busca global_customer_id do cliente local (tenant-scoped)
+  const customerResult = await ctx.db.execute<{ global_customer_id: string }>(
+    sql`SELECT global_customer_id FROM customers
+        WHERE id = ${customerId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const globalCustomerId = rows<{ global_customer_id: string }>(customerResult)[0]?.global_customer_id;
+  if (!globalCustomerId) return;
+
+  // Busca itens de pacote de aula desta comanda (usa snapshot class_count_at_sale — regra 10)
+  const itemsResult = await ctx.db.execute<{
+    item_id: string;
+    class_package_id: string;
+    quantity: number;
+    class_count_at_sale: number;
+  }>(
+    sql`SELECT ci.id AS item_id, ci.class_package_id, ci.quantity, ci.class_count_at_sale
+        FROM comanda_items ci
+        WHERE ci.comanda_id = ${comandaId} AND ci.tenant_id = ${ctx.tenantId}
+          AND ci.item_type = 'class_package' AND ci.class_package_id IS NOT NULL
+          AND ci.class_count_at_sale IS NOT NULL`
+  );
+  const pkgItems = rows<{ item_id: string; class_package_id: string; quantity: number; class_count_at_sale: number }>(itemsResult);
+  if (pkgItems.length === 0) return;
+
+  for (const item of pkgItems) {
+    const remainingClasses = item.class_count_at_sale * item.quantity;
+    // ON CONFLICT garante idempotência: re-close (reopen + close) não gera crédito duplo
+    await ctx.db.execute(
+      sql`INSERT INTO student_class_balance
+            (tenant_id, global_customer_id, class_package_id, comanda_item_id, remaining_classes, purchased_at)
+          VALUES (${ctx.tenantId}, ${globalCustomerId}, ${item.class_package_id}, ${item.item_id}, ${remainingClasses}, now())
+          ON CONFLICT (tenant_id, comanda_item_id) DO NOTHING`
+    );
+  }
 }
 
 // --- Cancelamento de item de comanda (PDV-09) -------------------------------

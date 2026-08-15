@@ -167,6 +167,8 @@ export const customerOptInLgpd = pgTable(
     optOutAt: timestamp("opt_out_at"),
     changedByUserId: uuid("changed_by_user_id"),
     changedAt: timestamp("changed_at").defaultNow().notNull(),
+    /** WPP-03: canal que originou a alteração — 'whatsapp' | 'admin' | 'web' */
+    channel: varchar("channel", { length: 20 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -264,6 +266,10 @@ export const comandaItems = pgTable(
     productId: uuid("product_id"),
     /** Locação vinculada (PDV-05); null para itens de produto. Sem FK dura para não travar. */
     courtBookingId: uuid("court_booking_id"),
+    /** Pacote de aulas vinculado (PDV-06); null para demais tipos. Sem FK dura — exclusão de pacote não apaga histórico financeiro. */
+    classPackageId: uuid("class_package_id"),
+    /** Snapshot do total de aulas do pacote no momento do lançamento (PDV-06 — regra 10). null para tipos product e court_rental. */
+    classCountAtSale: integer("class_count_at_sale"),
     productNameAtSale: varchar("product_name_at_sale", { length: 255 }).notNull(),
     quantity: integer("quantity").notNull(),
     unitPriceCentsAtSale: integer("unit_price_cents_at_sale").notNull(),
@@ -492,6 +498,8 @@ export const studentClassBalance = pgTable(
     tenantId: tenantId(),
     globalCustomerId: uuid("global_customer_id").notNull(),
     classPackageId: uuid("class_package_id").notNull(),
+    /** Chave de idempotência: garante que re-close (reopen + close) não gera crédito duplo. */
+    comandaItemId: uuid("comanda_item_id").notNull(),
     remainingClasses: integer("remaining_classes").notNull(),
     purchasedAt: timestamp("purchased_at").defaultNow().notNull(),
     expiresAt: timestamp("expires_at"),
@@ -499,8 +507,28 @@ export const studentClassBalance = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => ({
-    globalCustomerIdIdx: index("student_class_balance_global_customer_id_idx").on(t.globalCustomerId),
-    classPackageIdIdx: index("student_class_balance_class_package_id_idx").on(t.classPackageId),
+    tenantCustomerIdx: index("student_class_balance_tenant_customer_idx").on(t.tenantId, t.globalCustomerId),
+    tenantPackageIdx: index("student_class_balance_tenant_package_idx").on(t.tenantId, t.classPackageId),
+    comandaItemUniqueIdx: uniqueIndex("student_class_balance_comanda_item_uniq").on(t.tenantId, t.comandaItemId),
+  })
+);
+
+/**
+ * Auditoria de débitos de aulas (PDV-06): registra cada vez que um operador
+ * decrementa 1 aula do saldo de um aluno. Sem FK dura em `student_class_balance_id`
+ * para preservar o log mesmo em eventual anonimização LGPD do saldo.
+ */
+export const classDebitLog = pgTable(
+  "class_debit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    studentClassBalanceId: uuid("student_class_balance_id").notNull(),
+    debitedByUserId: uuid("debited_by_user_id").notNull(),
+    debitedAt: timestamp("debited_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantBalanceIdx: index("class_debit_log_tenant_balance_idx").on(t.tenantId, t.studentClassBalanceId),
   })
 );
 
@@ -748,6 +776,31 @@ export const customerPointsTransactions = pgTable(
   })
 );
 
+// --- WPP-04: Log de mensagens WhatsApp enviadas ---------------------------
+
+export const whatsappMessageLog = pgTable(
+  "whatsapp_message_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    /** Sem FK: anonimização LGPD (CAD-06) não pode cascatear exclusão do log. */
+    customerId: uuid("customer_id").notNull(),
+    comandaId: uuid("comanda_id"),
+    toE164: varchar("to_e164", { length: 20 }).notNull(),
+    bodyText: text("body_text").notNull(),
+    /** queued | sent | delivered | error  (delivered: reservado, não populado nesta US) */
+    status: varchar("status", { length: 20 }).notNull().default("queued"),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    sentAt: timestamp("sent_at"),
+    errorDescription: text("error_description"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantCustomerIdx: index("whatsapp_msg_log_tenant_customer_idx").on(t.tenantId, t.customerId),
+    tenantStatusIdx: index("whatsapp_msg_log_tenant_status_idx").on(t.tenantId, t.status),
+  })
+);
+
 // ---------------------------------------------------------------------------
 // Tabelas com escopo de arena (protegidas por RLS). Fonte única para o runner
 // de migrations habilitar RLS e para testes de isolamento.
@@ -775,12 +828,14 @@ export const TENANT_SCOPED_TABLES = [
   "advertisers",
   "class_packages",
   "student_class_balance",
+  "class_debit_log",
   "whatsapp_connections",
   "whatsapp_auth_creds",
   "whatsapp_auth_keys",
   "points_settings",
   "customer_points_balance",
   "customer_points_transactions",
+  "whatsapp_message_log",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -833,6 +888,8 @@ export type ClassPackage = typeof classPackages.$inferSelect;
 export type NewClassPackage = typeof classPackages.$inferInsert;
 export type StudentClassBalance = typeof studentClassBalance.$inferSelect;
 export type NewStudentClassBalance = typeof studentClassBalance.$inferInsert;
+export type ClassDebitLog = typeof classDebitLog.$inferSelect;
+export type NewClassDebitLog = typeof classDebitLog.$inferInsert;
 export type WhatsappConnection = typeof whatsappConnections.$inferSelect;
 export type NewWhatsappConnection = typeof whatsappConnections.$inferInsert;
 export type WhatsappAuthCreds = typeof whatsappAuthCreds.$inferSelect;
@@ -849,4 +906,6 @@ export type CustomerPointsBalance = typeof customerPointsBalance.$inferSelect;
 export type NewCustomerPointsBalance = typeof customerPointsBalance.$inferInsert;
 export type CustomerPointsTransactions = typeof customerPointsTransactions.$inferSelect;
 export type NewCustomerPointsTransactions = typeof customerPointsTransactions.$inferInsert;
+export type WhatsappMessageLog = typeof whatsappMessageLog.$inferSelect;
+export type NewWhatsappMessageLog = typeof whatsappMessageLog.$inferInsert;
 

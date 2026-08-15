@@ -43,6 +43,15 @@ export async function getClassPackages(ctx: TenantContext): Promise<ClassPackage
   return rows<ClassPackageRow>(result).map(toClassPackage);
 }
 
+export async function getActiveClassPackages(ctx: TenantContext): Promise<ClassPackage[]> {
+  assertTenantId(ctx.tenantId);
+  const result = await ctx.db.execute<ClassPackageRow>(
+    sql`SELECT ${COLS} FROM class_packages
+        WHERE tenant_id = ${ctx.tenantId} AND is_active = true ORDER BY name ASC`
+  );
+  return rows<ClassPackageRow>(result).map(toClassPackage);
+}
+
 export async function createClassPackage(
   ctx: TenantContext,
   input: CreateClassPackageInput

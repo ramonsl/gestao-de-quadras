@@ -81,4 +81,13 @@ export class FakeMessagingProvider implements MessagingProvider {
     this.setStatus(tenantId, { status: "disconnected_permanent", qrCode: null });
     this.emit({ type: "permanentDisconnect", tenantId });
   }
+
+  simulateIncomingMessage(
+    tenantId: string,
+    fromE164: string,
+    text: string,
+    baileysMessageId = "fake-msg-id"
+  ): void {
+    this.emit({ type: "incomingMessage", tenantId, fromE164, text, baileysMessageId });
+  }
 }

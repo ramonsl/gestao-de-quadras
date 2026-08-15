@@ -1,5 +1,5 @@
 {
-  "id": "daf2203f-333e-4f1e-b087-49d2dfadd93d",
+  "id": "90424574-4079-4018-8834-b2ae3a505bd3",
   "prevId": "fe880454-17d7-447d-abb7-d72f66b8baad",
   "version": "5",
   "dialect": "pg",
@@ -534,71 +534,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
     },
-    "class_debit_log": {
-      "name": "class_debit_log",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "student_class_balance_id": {
-          "name": "student_class_balance_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "debited_by_user_id": {
-          "name": "debited_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "debited_at": {
-          "name": "debited_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "class_debit_log_tenant_balance_idx": {
-          "name": "class_debit_log_tenant_balance_idx",
-          "columns": [
-            "tenant_id",
-            "student_class_balance_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "class_debit_log_tenant_id_tenants_id_fk": {
-          "name": "class_debit_log_tenant_id_tenants_id_fk",
-          "tableFrom": "class_debit_log",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
-    },
     "class_packages": {
       "name": "class_packages",
       "schema": "",
@@ -722,12 +657,6 @@
         },
         "court_booking_id": {
           "name": "court_booking_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "class_package_id": {
-          "name": "class_package_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -2649,18 +2578,16 @@
         }
       },
       "indexes": {
-        "student_class_balance_tenant_customer_idx": {
-          "name": "student_class_balance_tenant_customer_idx",
+        "student_class_balance_global_customer_id_idx": {
+          "name": "student_class_balance_global_customer_id_idx",
           "columns": [
-            "tenant_id",
             "global_customer_id"
           ],
           "isUnique": false
         },
-        "student_class_balance_tenant_package_idx": {
-          "name": "student_class_balance_tenant_package_idx",
+        "student_class_balance_class_package_id_idx": {
+          "name": "student_class_balance_class_package_id_idx",
           "columns": [
-            "tenant_id",
             "class_package_id"
           ],
           "isUnique": false
@@ -2670,6 +2597,91 @@
         "student_class_balance_tenant_id_tenants_id_fk": {
           "name": "student_class_balance_tenant_id_tenants_id_fk",
           "tableFrom": "student_class_balance",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "tenant_print_configs": {
+      "name": "tenant_print_configs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paper_size": {
+          "name": "paper_size",
+          "type": "varchar(5)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'80mm'"
+        },
+        "auto_print_production_tickets": {
+          "name": "auto_print_production_tickets",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "receipt_header": {
+          "name": "receipt_header",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "receipt_footer": {
+          "name": "receipt_footer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tenant_print_configs_tenant_unique": {
+          "name": "tenant_print_configs_tenant_unique",
+          "columns": [
+            "tenant_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "tenant_print_configs_tenant_id_tenants_id_fk": {
+          "name": "tenant_print_configs_tenant_id_tenants_id_fk",
+          "tableFrom": "tenant_print_configs",
           "tableTo": "tenants",
           "columnsFrom": [
             "tenant_id"

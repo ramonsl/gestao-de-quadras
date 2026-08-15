@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ComandaWithItems, ComandaItemView, ComandaPaymentView } from "@gestao-de-quadras/core/pdv";
 import type { ClassBalanceView } from "@gestao-de-quadras/core/classes/class-balance.service";
 import type { ClassPackage, Product } from "@gestao-de-quadras/db/schema";
+import type { PrintConfigView } from "@gestao-de-quadras/core/print";
 import { formatCentsToBRL } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +41,7 @@ interface ComandaWorkspaceProps {
   classPackages: ClassPackage[];
   activeBalances: ClassBalanceView[];
   userRole?: string;
+  printConfig?: PrintConfigView;
 }
 
 interface PendingItem {
@@ -61,6 +63,7 @@ export function ComandaWorkspace({
   classPackages,
   activeBalances,
   userRole,
+  printConfig,
 }: ComandaWorkspaceProps) {
   const router = useRouter();
   const comandaId = initialComanda.id;
@@ -102,6 +105,10 @@ export function ComandaWorkspace({
       setPendingDebitCents(0);
     }
   }, [customerId]);
+
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState(
+    printConfig?.autoPrintProductionTickets ?? false
+  );
 
   const [isLinkDialogOpen, setLinkDialogOpen] = useState(false);
   const [isQuickCreateOpen, setQuickCreateOpen] = useState(false);
@@ -225,6 +232,9 @@ export function ComandaWorkspace({
       setPendingCart([]);
       setIsAddingItems(false);
       router.refresh();
+      if (autoPrintEnabled) {
+        window.print();
+      }
     } catch {
       setErrorMessage("Não foi possível confirmar o lançamento dos itens. Tente novamente.");
     } finally {
@@ -264,13 +274,18 @@ export function ComandaWorkspace({
     router.refresh();
   }
 
+  const paperSize = printConfig?.paperSize ?? "80mm";
+
   return (
-    <div className="max-w-6xl mx-auto space-y-5 pb-12">
+    <div
+      className="max-w-6xl mx-auto space-y-5 pb-12"
+      data-paper-size={paperSize}
+    >
       {/* Botão de Navegação / Voltar ao Painel */}
       <div className="flex items-center justify-between">
         <Link
           href="/pdv"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-[var(--border)] rounded-[var(--radius-button)] text-xs font-bold text-[var(--text-1)] hover:bg-gray-50 hover:border-[var(--accent)] shadow-sm transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-[var(--border)] rounded-[var(--radius-button)] text-xs font-bold text-[var(--text-1)] hover:bg-gray-50 hover:border-[var(--accent)] shadow-sm transition-colors active:opacity-80"
         >
           <ArrowLeft className="w-4 h-4 text-[var(--accent)]" />
           <span>Voltar para a Grade de Comandas</span>
@@ -340,7 +355,7 @@ export function ComandaWorkspace({
                 setErrorMessage(null);
                 setIsAddingItems(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-button)] text-white font-semibold text-sm shadow-sm transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-button)] text-white font-semibold text-sm shadow-sm transition-colors active:opacity-80"
               style={{ backgroundColor: "var(--accent)" }}
             >
               <Plus className="w-4 h-4" />
@@ -355,7 +370,7 @@ export function ComandaWorkspace({
                 setErrorMessage(null);
                 setIsCloseDialogOpen(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-button)] text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-button)] text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors active:opacity-80"
             >
               <span>Encerrar & Pagar</span>
             </button>
@@ -548,7 +563,10 @@ export function ComandaWorkspace({
       ) : (
         /* SEÇÃO 2: VISUALIZAÇÃO PADRÃO DA COMANDA */
         <div className="space-y-5">
-          <PrintTicketToggle />
+          <PrintTicketToggle
+        autoPrint={autoPrintEnabled}
+        onChange={setAutoPrintEnabled}
+      />
 
           <div className="border border-[var(--border)] rounded-[var(--radius-card)] bg-white overflow-hidden shadow-sm">
             <div className="px-4 py-3 bg-[var(--bg-sunken)] border-b border-[var(--border)] flex items-center justify-between">
@@ -659,6 +677,35 @@ export function ComandaWorkspace({
           )}
         </div>
       )}
+
+      {/* Área de impressão — visível apenas em @media print (CAD-07) */}
+      <div data-print-area className="hidden">
+        <div className="print-receipt">
+          {printConfig?.receiptHeader && (
+            <div className="print-receipt-header">{printConfig.receiptHeader}</div>
+          )}
+          <div className="my-2 border-b border-dashed border-black" />
+          <p className="font-bold text-center mb-1">Comanda #{comandaId.slice(0, 8)}</p>
+          {customerName && <p className="text-center">{customerName}</p>}
+          <div className="my-2 border-b border-dashed border-black" />
+          {items.map((item) => (
+            <div key={item.id} className="flex justify-between text-xs">
+              <span>{item.productNameAtSale} x{item.quantity}</span>
+              <span>
+                {((item.unitPriceCentsAtSale * item.quantity) / 100).toFixed(2).replace(".", ",")}
+              </span>
+            </div>
+          ))}
+          <div className="my-2 border-b border-dashed border-black" />
+          <div className="flex justify-between font-bold">
+            <span>Total</span>
+            <span>{(totalCents / 100).toFixed(2).replace(".", ",")}</span>
+          </div>
+          {printConfig?.receiptFooter && (
+            <div className="print-receipt-footer">{printConfig.receiptFooter}</div>
+          )}
+        </div>
+      </div>
 
       {/* Modal de Fechamento de Comanda */}
       <CloseComandaDialog

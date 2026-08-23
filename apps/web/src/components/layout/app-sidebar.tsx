@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,13 +17,20 @@ import {
   Megaphone,
   Building2,
   Printer,
+  Award,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import type { WhatsAppConnectionStatus } from "@gestao-de-quadras/messaging";
 import { WhatsAppStatusBadge } from "@/components/whatsapp/whatsapp-status-badge";
 
-const LOCAL_STORAGE_KEY = "arena_sidebar_collapsed";
+/**
+ * Estado de collapse persistido em cookie (não localStorage) para que o servidor
+ * renderize já com o valor correto — evitando flash e mismatch de hidratação.
+ */
+export const SIDEBAR_COLLAPSED_COOKIE = "arena_sidebar_collapsed";
+// 1 ano
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export interface AppSidebarProps {
   session: {
@@ -34,6 +41,7 @@ export interface AppSidebarProps {
     isAdmin: boolean;
   };
   initialWhatsAppStatus: WhatsAppConnectionStatus;
+  initialCollapsed?: boolean;
 }
 
 interface NavItem {
@@ -42,21 +50,14 @@ interface NavItem {
   icon: React.ElementType;
 }
 
-export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) {
+export function AppSidebar({ session, initialWhatsAppStatus, initialCollapsed = false }: AppSidebarProps) {
   const pathname = usePathname();
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (saved === "true") {
-      setIsCollapsed(true);
-    }
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(initialCollapsed);
 
   const toggleSidebar = () => {
     setIsCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem(LOCAL_STORAGE_KEY, String(next));
+      document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; SameSite=Lax`;
       return next;
     });
   };
@@ -96,6 +97,9 @@ export function AppSidebar({ session, initialWhatsAppStatus }: AppSidebarProps) 
           { href: "/admin/publicidade/espacos", label: "Espaços Publicitários", icon: Megaphone },
           { href: "/admin/publicidade/anunciantes", label: "Anunciantes", icon: Building2 },
         ]
+      : []),
+    ...((isAdmin || session.role === "gerente") && canAccess("pontos")
+      ? [{ href: "/admin/pontos", label: "Pontos / Cashback", icon: Award }]
       : []),
     ...(isAdmin || session.role === "gerente"
       ? [{ href: "/admin/impressao", label: "Impressão Térmica", icon: Printer }]

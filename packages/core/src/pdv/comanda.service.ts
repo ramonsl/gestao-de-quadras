@@ -962,4 +962,228 @@ export async function reopenComanda(
   return { success: true, comandaId: data.comandaId };
 }
 
+// --- Transferência de itens entre comandas (PDV-10) -------------------------
+
+export const TransferItemsInputSchema = z.object({
+  sourceComandaId: z.string().uuid(),
+  destinationComandaId: z.string().uuid(),
+  itemIds: z.array(z.string().uuid()).min(1),
+  /** Justificativa opcional para a transferência (auditoria). */
+  justificativa: z.string().trim().optional(),
+});
+
+export type TransferItemsResult =
+  | {
+      success: true;
+      transferredItemIds: string[];
+      sourceTotalCents: number;
+      destinationTotalCents: number;
+    }
+  | {
+      success: false;
+      reason:
+        | "same_comanda"
+        | "source_comanda_not_found"
+        | "source_comanda_closed"
+        | "destination_comanda_not_found"
+        | "destination_comanda_closed"
+        | "item_not_found"
+        | "destination_requires_customer";
+      /** ID do item que não foi encontrado na comanda de origem. */
+      missingItemId?: string;
+    };
+
+export async function transferItemsBetweenComandas(
+  ctx: TenantContext,
+  input: z.infer<typeof TransferItemsInputSchema>,
+  notificationQueue?: NotificationQueuePort
+): Promise<TransferItemsResult> {
+  assertTenantId(ctx.tenantId);
+  if (!ctx.actorUserId) {
+    throw new Error("transferItemsBetweenComandas exige ctx.actorUserId.");
+  }
+  const data = TransferItemsInputSchema.parse(input);
+
+  // AC9: Rejeita transferência para a mesma comanda.
+  if (data.sourceComandaId === data.destinationComandaId) {
+    return { success: false, reason: "same_comanda" };
+  }
+
+  // 1. Valida comanda de ORIGEM (tenant-scoped).
+  const srcResult = await ctx.db.execute<ComandaRow>(
+    sql`SELECT ${COMANDA_COLS} FROM comandas WHERE id = ${data.sourceComandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const srcRow = rows<ComandaRow>(srcResult)[0];
+  if (!srcRow) return { success: false, reason: "source_comanda_not_found" };
+  if (srcRow.status !== "open") return { success: false, reason: "source_comanda_closed" };
+
+  // 2. Valida comanda de DESTINO (tenant-scoped).
+  const dstResult = await ctx.db.execute<ComandaRow>(
+    sql`SELECT ${COMANDA_COLS} FROM comandas WHERE id = ${data.destinationComandaId} AND tenant_id = ${ctx.tenantId} LIMIT 1`
+  );
+  const dstRow = rows<ComandaRow>(dstResult)[0];
+  if (!dstRow) return { success: false, reason: "destination_comanda_not_found" };
+  if (dstRow.status !== "open") return { success: false, reason: "destination_comanda_closed" };
+
+  // 3. Busca os itens selecionados — todos devem pertencer à comanda de origem.
+  const itemsResult = await ctx.db.execute<ComandaItemRow>(
+    sql`SELECT ${ITEM_COLS} FROM comanda_items
+        WHERE tenant_id = ${ctx.tenantId} AND comanda_id = ${data.sourceComandaId}
+        ORDER BY created_at ASC`
+  );
+  const allSourceItems = rows<ComandaItemRow>(itemsResult);
+  const sourceItemMap = new Map(allSourceItems.map((i) => [i.id, i]));
+
+  for (const itemId of data.itemIds) {
+    if (!sourceItemMap.has(itemId)) {
+      return { success: false, reason: "item_not_found", missingItemId: itemId };
+    }
+  }
+
+  const selectedItems = data.itemIds.map((id) => sourceItemMap.get(id)!);
+
+  // AC4: Itens class_package exigem que a comanda de destino tenha cliente vinculado.
+  const hasClassPackage = selectedItems.some((i) => i.item_type === "class_package");
+  if (hasClassPackage && !dstRow.customer_id) {
+    return { success: false, reason: "destination_requires_customer" };
+  }
+
+  // 4. Move os itens: UPDATE comanda_id para a comanda de destino.
+  //    Metadados originais (operator_user_id, created_at, preço, nome) são preservados (AC3).
+  for (const itemId of data.itemIds) {
+    await ctx.db.execute(
+      sql`UPDATE comanda_items SET comanda_id = ${data.destinationComandaId}
+          WHERE id = ${itemId} AND tenant_id = ${ctx.tenantId} AND comanda_id = ${data.sourceComandaId}`
+    );
+  }
+
+  // 5. Recalcula totais de ambas as comandas (AC5).
+  const srcTotalResult = await ctx.db.execute<{ total: string | null }>(
+    sql`SELECT COALESCE(SUM(quantity * unit_price_cents_at_sale), 0) AS total
+        FROM comanda_items WHERE tenant_id = ${ctx.tenantId} AND comanda_id = ${data.sourceComandaId}`
+  );
+  const sourceTotalCents = Number(rows<{ total: string | null }>(srcTotalResult)[0]?.total ?? 0);
+
+  const dstTotalResult = await ctx.db.execute<{ total: string | null }>(
+    sql`SELECT COALESCE(SUM(quantity * unit_price_cents_at_sale), 0) AS total
+        FROM comanda_items WHERE tenant_id = ${ctx.tenantId} AND comanda_id = ${data.destinationComandaId}`
+  );
+  const destinationTotalCents = Number(rows<{ total: string | null }>(dstTotalResult)[0]?.total ?? 0);
+
+  // 6. Audit log (AC8).
+  await writeAudit(ctx, "pdv.items.transferred", {
+    sourceComandaId: data.sourceComandaId,
+    destinationComandaId: data.destinationComandaId,
+    itemIds: data.itemIds,
+    actorUserId: ctx.actorUserId,
+    justificativa: data.justificativa ?? null,
+  });
+
+  // 7. Notificações de correção via WhatsApp (AC6 + AC7).
+  if (notificationQueue) {
+    const transferredViews = selectedItems.map(toItemView);
+    const formatCurrency = (cents: number): string =>
+      `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
+
+    // AC6: Notificação ao cliente da comanda de ORIGEM (itens removidos).
+    if (srcRow.customer_id) {
+      void enqueueTransferCorrectionNotification(
+        ctx,
+        {
+          customerId: srcRow.customer_id,
+          comandaId: data.sourceComandaId,
+          items: transferredViews,
+          newTotalCents: sourceTotalCents,
+          direction: "removed",
+        },
+        notificationQueue,
+        formatCurrency
+      ).catch(() => undefined);
+    }
+
+    // AC7: Notificação ao cliente da comanda de DESTINO (itens adicionados).
+    if (dstRow.customer_id) {
+      void enqueueTransferCorrectionNotification(
+        ctx,
+        {
+          customerId: dstRow.customer_id,
+          comandaId: data.destinationComandaId,
+          items: transferredViews,
+          newTotalCents: destinationTotalCents,
+          direction: "added",
+        },
+        notificationQueue,
+        formatCurrency
+      ).catch(() => undefined);
+    }
+  }
+
+  return {
+    success: true,
+    transferredItemIds: data.itemIds,
+    sourceTotalCents,
+    destinationTotalCents,
+  };
+}
+
+/**
+ * Enfileira notificação de correção por transferência de itens (PDV-10 AC6/AC7).
+ * Fire-and-forget — nunca lança erro para o chamador.
+ */
+async function enqueueTransferCorrectionNotification(
+  ctx: TenantContext,
+  input: {
+    customerId: string;
+    comandaId: string;
+    items: ComandaItemView[];
+    newTotalCents: number;
+    direction: "removed" | "added";
+  },
+  queue: NotificationQueuePort,
+  formatCurrency: (cents: number) => string
+): Promise<void> {
+  // Verifica opt-in LGPD do cliente.
+  const optInResult = await ctx.db.execute<{ opt_in: boolean }>(
+    sql`SELECT opt_in FROM customer_opt_in_lgpd
+        WHERE customer_id = ${input.customerId} AND tenant_id = ${ctx.tenantId}
+        LIMIT 1`
+  );
+  const optIn = rows<{ opt_in: boolean }>(optInResult)[0];
+  if (!optIn?.opt_in) return;
+
+  // Busca WhatsApp do cliente.
+  const customerResult = await ctx.db.execute<{ whatsapp: string | null }>(
+    sql`SELECT whatsapp FROM customers
+        WHERE id = ${input.customerId} AND tenant_id = ${ctx.tenantId}
+        LIMIT 1`
+  );
+  const customer = rows<{ whatsapp: string | null }>(customerResult)[0];
+  if (!customer?.whatsapp) return;
+
+  const itemLines = input.items.map(
+    (it) => `• ${it.productNameAtSale} x${it.quantity} — ${formatCurrency(it.unitPriceCentsAtSale)}`
+  );
+
+  const header =
+    input.direction === "removed"
+      ? "🔄 *Correção na sua comanda — itens transferidos:*"
+      : "🔄 *Correção na sua comanda — itens recebidos:*";
+
+  const bodyText = [
+    header,
+    "",
+    ...itemLines,
+    "",
+    `*Novo total da comanda: ${formatCurrency(input.newTotalCents)}*`,
+  ].join("\n");
+
+  await queue.enqueueTextMessage({
+    tenantId: ctx.tenantId,
+    customerId: input.customerId,
+    comandaId: input.comandaId,
+    toE164: customer.whatsapp,
+    bodyText,
+  });
+}
+
 

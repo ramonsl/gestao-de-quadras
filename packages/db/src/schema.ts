@@ -749,6 +749,14 @@ export const pointsSettings = pgTable(
     maxRedemptionPercentage: integer("max_redemption_percentage").default(50).notNull(),
     /** 'all' (todos os clientes) ou 'affiliates_only' (apenas filiados). */
     allowedParticipants: varchar("allowed_participants", { length: 30 }).default("all").notNull(),
+    /** Taxa de acúmulo para itens da Copa (centavos por ponto). null = usar taxa padrão; 0 = desabilitado. */
+    earnRateCopa: integer("earn_rate_copa"),
+    /** Taxa de acúmulo para Locação de Quadras (centavos por ponto). null = usar taxa padrão; 0 = desabilitado. */
+    earnRateCourtRental: integer("earn_rate_court_rental"),
+    /** Taxa de acúmulo para Pacotes de Aulas/Serviços (centavos por ponto). null = usar taxa padrão; 0 = desabilitado. */
+    earnRateClassPackage: integer("earn_rate_class_package"),
+    /** Permitir resgate parcial? Quando false, cliente deve cobrir 100% da comanda com pontos ou não resgatar. */
+    allowPartialRedemption: boolean("allow_partial_redemption").default(true).notNull(),
     /** Período de expiração em dias (ex.: 180). */
     expirationDays: integer("expiration_days").default(180).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),

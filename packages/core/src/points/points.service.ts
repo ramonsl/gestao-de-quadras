@@ -7,8 +7,13 @@ export interface PointsSettingsView {
   tenantId: string;
   enabled: boolean;
   earnRateCentsPerPoint: number;
+  /** Taxa por categoria — null = usar a taxa padrão (earnRateCentsPerPoint); 0 = sem acúmulo. */
+  earnRateCopa: number | null;
+  earnRateCourtRental: number | null;
+  earnRateClassPackage: number | null;
   redemptionPointsPerReal: number;
   maxRedemptionPercentage: number;
+  allowPartialRedemption: boolean;
   allowedParticipants: "all" | "affiliates_only";
   expirationDays: number;
 }
@@ -27,8 +32,13 @@ export interface CustomerPointsSummary {
 export const UpsertPointsSettingsInputSchema = z.object({
   enabled: z.boolean(),
   earnRateCentsPerPoint: z.number().int().positive().default(100),
+  /** null = usar taxa padrão; 0 = sem acúmulo para esta categoria; >0 = taxa específica. */
+  earnRateCopa: z.number().int().min(0).nullable().default(null),
+  earnRateCourtRental: z.number().int().min(0).nullable().default(null),
+  earnRateClassPackage: z.number().int().min(0).nullable().default(null),
   redemptionPointsPerReal: z.number().int().positive().default(100),
   maxRedemptionPercentage: z.number().int().min(0).max(100).default(50),
+  allowPartialRedemption: z.boolean().default(true),
   allowedParticipants: z.enum(["all", "affiliates_only"]).default("all"),
   expirationDays: z.number().int().positive().default(180),
 });
@@ -38,8 +48,12 @@ type PointsSettingsRow = {
   tenant_id: string;
   enabled: boolean;
   earn_rate_cents_per_point: number;
+  earn_rate_copa: number | null;
+  earn_rate_court_rental: number | null;
+  earn_rate_class_package: number | null;
   redemption_points_per_real: number;
   max_redemption_percentage: number;
+  allow_partial_redemption: boolean;
   allowed_participants: string;
   expiration_days: number;
 };
@@ -55,8 +69,12 @@ const DEFAULT_SETTINGS: (tenantId: string) => PointsSettingsView = (tenantId) =>
   tenantId,
   enabled: false,
   earnRateCentsPerPoint: 100,
+  earnRateCopa: null,
+  earnRateCourtRental: null,
+  earnRateClassPackage: null,
   redemptionPointsPerReal: 100,
   maxRedemptionPercentage: 50,
+  allowPartialRedemption: true,
   allowedParticipants: "all",
   expirationDays: 180,
 });
@@ -67,8 +85,12 @@ function toSettingsView(row: PointsSettingsRow): PointsSettingsView {
     tenantId: row.tenant_id,
     enabled: Boolean(row.enabled),
     earnRateCentsPerPoint: Number(row.earn_rate_cents_per_point),
+    earnRateCopa: row.earn_rate_copa != null ? Number(row.earn_rate_copa) : null,
+    earnRateCourtRental: row.earn_rate_court_rental != null ? Number(row.earn_rate_court_rental) : null,
+    earnRateClassPackage: row.earn_rate_class_package != null ? Number(row.earn_rate_class_package) : null,
     redemptionPointsPerReal: Number(row.redemption_points_per_real),
     maxRedemptionPercentage: Number(row.max_redemption_percentage),
+    allowPartialRedemption: Boolean(row.allow_partial_redemption),
     allowedParticipants: row.allowed_participants as "all" | "affiliates_only",
     expirationDays: Number(row.expiration_days),
   };
@@ -77,8 +99,10 @@ function toSettingsView(row: PointsSettingsRow): PointsSettingsView {
 export async function getPointsSettings(ctx: TenantContext): Promise<PointsSettingsView> {
   assertTenantId(ctx.tenantId);
   const result = await ctx.db.execute<PointsSettingsRow>(
-    sql`SELECT id, tenant_id, enabled, earn_rate_cents_per_point, redemption_points_per_real,
-               max_redemption_percentage, allowed_participants, expiration_days
+    sql`SELECT id, tenant_id, enabled, earn_rate_cents_per_point,
+               earn_rate_copa, earn_rate_court_rental, earn_rate_class_package,
+               redemption_points_per_real, max_redemption_percentage,
+               allow_partial_redemption, allowed_participants, expiration_days
         FROM points_settings
         WHERE tenant_id = ${ctx.tenantId}
         LIMIT 1`
@@ -100,23 +124,33 @@ export async function upsertPointsSettings(
 
   const result = await ctx.db.execute<PointsSettingsRow>(
     sql`INSERT INTO points_settings (
-          tenant_id, enabled, earn_rate_cents_per_point, redemption_points_per_real,
-          max_redemption_percentage, allowed_participants, expiration_days
+          tenant_id, enabled, earn_rate_cents_per_point,
+          earn_rate_copa, earn_rate_court_rental, earn_rate_class_package,
+          redemption_points_per_real, max_redemption_percentage,
+          allow_partial_redemption, allowed_participants, expiration_days
         )
         VALUES (
-          ${ctx.tenantId}, ${data.enabled}, ${data.earnRateCentsPerPoint}, ${data.redemptionPointsPerReal},
-          ${data.maxRedemptionPercentage}, ${data.allowedParticipants}, ${data.expirationDays}
+          ${ctx.tenantId}, ${data.enabled}, ${data.earnRateCentsPerPoint},
+          ${data.earnRateCopa}, ${data.earnRateCourtRental}, ${data.earnRateClassPackage},
+          ${data.redemptionPointsPerReal}, ${data.maxRedemptionPercentage},
+          ${data.allowPartialRedemption}, ${data.allowedParticipants}, ${data.expirationDays}
         )
         ON CONFLICT (tenant_id) DO UPDATE SET
           enabled = EXCLUDED.enabled,
           earn_rate_cents_per_point = EXCLUDED.earn_rate_cents_per_point,
+          earn_rate_copa = EXCLUDED.earn_rate_copa,
+          earn_rate_court_rental = EXCLUDED.earn_rate_court_rental,
+          earn_rate_class_package = EXCLUDED.earn_rate_class_package,
           redemption_points_per_real = EXCLUDED.redemption_points_per_real,
           max_redemption_percentage = EXCLUDED.max_redemption_percentage,
+          allow_partial_redemption = EXCLUDED.allow_partial_redemption,
           allowed_participants = EXCLUDED.allowed_participants,
           expiration_days = EXCLUDED.expiration_days,
           updated_at = now()
-        RETURNING id, tenant_id, enabled, earn_rate_cents_per_point, redemption_points_per_real,
-                  max_redemption_percentage, allowed_participants, expiration_days`
+        RETURNING id, tenant_id, enabled, earn_rate_cents_per_point,
+                  earn_rate_copa, earn_rate_court_rental, earn_rate_class_package,
+                  redemption_points_per_real, max_redemption_percentage,
+                  allow_partial_redemption, allowed_participants, expiration_days`
   );
   return toSettingsView(rows<PointsSettingsRow>(result)[0]);
 }

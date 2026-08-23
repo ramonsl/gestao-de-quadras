@@ -32,7 +32,8 @@ import {
   getCustomerDebitSummaryAction,
   transferComandaToCustomerDebitAction,
 } from "../../_actions/customer-debit.actions";
-import { ArrowLeft, TriangleAlert, CreditCard, RefreshCw, Printer, X, ShoppingCart, GraduationCap, Trash2, Plus } from "lucide-react";
+import { TransferItemsDialog } from "./transfer-items-dialog";
+import { ArrowLeft, TriangleAlert, CreditCard, RefreshCw, Printer, X, ShoppingCart, GraduationCap, Trash2, Plus, ArrowRightLeft } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface ComandaWorkspaceProps {
@@ -77,6 +78,7 @@ export function ComandaWorkspace({
   const [totalCents, setTotalCents] = useState(initialComanda.totalCents);
 
   const [cancellingItem, setCancellingItem] = useState<ComandaItemView | null>(null);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
 
   useEffect(() => {
     setStatus(initialComanda.status);
@@ -364,16 +366,29 @@ export function ComandaWorkspace({
           )}
 
           {!isClosed && items.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setErrorMessage(null);
-                setIsCloseDialogOpen(true);
-              }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-button)] text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors active:opacity-80"
-            >
-              <span>Encerrar & Pagar</span>
-            </button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setIsTransferOpen(true);
+                }}
+                className="font-semibold text-xs gap-1.5 inline-flex items-center"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" /> Transferir Itens
+              </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setIsCloseDialogOpen(true);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-button)] text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors active:opacity-80"
+              >
+                <span>Encerrar & Pagar</span>
+              </button>
+            </>
           )}
 
           {isClosed && (
@@ -762,6 +777,14 @@ export function ComandaWorkspace({
         open={isQuickCreateOpen}
         onOpenChange={setQuickCreateOpen}
         onCreated={handleCustomerCreatedForLink}
+      />
+
+      {/* Dialog de Transferência de Itens (PDV-10) */}
+      <TransferItemsDialog
+        open={isTransferOpen}
+        onOpenChange={setIsTransferOpen}
+        comandaId={comandaId}
+        items={items}
       />
 
       {cancellingItem && (

@@ -195,6 +195,15 @@ Como operador de caixa, quero transferir itens lançados incorretamente de uma c
 *   A transferência move o item mantendo todos os metadados (operador original que lançou e timestamp original de lançamento).
 *   A ação recalcula automaticamente os saldos parciais de ambas as comandas e dispara as notificações de correção via WhatsApp aos clientes envolvidos (caso tenham opt-in ativo).
 
+> ### Decisões de Implementação (2026-08-15)
+>
+> *   **Permissão:** qualquer usuário com módulo `pdv` pode transferir — não exige autorização de supervisor.
+> *   **Justificativa:** campo opcional (sem comprimento mínimo).
+> *   **Pacotes de aulas (`class_package`):** transferência rejeitada se a comanda de destino não tiver cliente vinculado (`destination_requires_customer`).
+> *   **Linhas inteiras:** a transferência move a linha completa (quantidade inteira); não há divisão parcial de quantidade.
+> *   **Notificações WhatsApp:** duas mensagens de texto via `enqueueTextMessage` — uma para o cliente da comanda de origem ("itens transferidos") e outra para o cliente da comanda de destino ("itens recebidos"), ambas condicionadas ao opt-in LGPD.
+> *   **Auditoria:** ação `pdv.items.transferred` registrada em `audit_logs` com IDs das comandas, IDs dos itens e justificativa.
+
 ---
 
 ## PDV-12 [P0] — Impressão Térmica de Fichas de Produção e Extrato de Comanda

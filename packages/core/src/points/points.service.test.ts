@@ -38,8 +38,12 @@ describe("points.service", () => {
 
       expect(res.enabled).toBe(false);
       expect(res.earnRateCentsPerPoint).toBe(100);
+      expect(res.earnRateCopa).toBeNull();
+      expect(res.earnRateCourtRental).toBeNull();
+      expect(res.earnRateClassPackage).toBeNull();
       expect(res.redemptionPointsPerReal).toBe(100);
       expect(res.maxRedemptionPercentage).toBe(50);
+      expect(res.allowPartialRedemption).toBe(true);
     });
 
     it("retorna configurações cadastradas quando existem no banco", async () => {
@@ -50,8 +54,12 @@ describe("points.service", () => {
             tenant_id: TENANT_ID,
             enabled: true,
             earn_rate_cents_per_point: 200,
+            earn_rate_copa: 150,
+            earn_rate_court_rental: null,
+            earn_rate_class_package: 0,
             redemption_points_per_real: 100,
             max_redemption_percentage: 40,
+            allow_partial_redemption: false,
             allowed_participants: "all",
             expiration_days: 90,
           },
@@ -61,7 +69,11 @@ describe("points.service", () => {
 
       expect(res.enabled).toBe(true);
       expect(res.earnRateCentsPerPoint).toBe(200);
+      expect(res.earnRateCopa).toBe(150);
+      expect(res.earnRateCourtRental).toBeNull();
+      expect(res.earnRateClassPackage).toBe(0);
       expect(res.maxRedemptionPercentage).toBe(40);
+      expect(res.allowPartialRedemption).toBe(false);
       expect(res.expirationDays).toBe(90);
     });
   });
@@ -75,8 +87,12 @@ describe("points.service", () => {
             tenant_id: TENANT_ID,
             enabled: true,
             earn_rate_cents_per_point: 100,
+            earn_rate_copa: 150,
+            earn_rate_court_rental: null,
+            earn_rate_class_package: 0,
             redemption_points_per_real: 100,
             max_redemption_percentage: 50,
+            allow_partial_redemption: true,
             allowed_participants: "all",
             expiration_days: 180,
           },
@@ -86,14 +102,60 @@ describe("points.service", () => {
       const res = await upsertPointsSettings(ctx, {
         enabled: true,
         earnRateCentsPerPoint: 100,
+        earnRateCopa: 150,
+        earnRateCourtRental: null,
+        earnRateClassPackage: 0,
         redemptionPointsPerReal: 100,
         maxRedemptionPercentage: 50,
+        allowPartialRedemption: true,
         allowedParticipants: "all",
         expirationDays: 180,
       });
 
       expect(res.enabled).toBe(true);
       expect(res.tenantId).toBe(TENANT_ID);
+      expect(res.earnRateCopa).toBe(150);
+      expect(res.earnRateCourtRental).toBeNull();
+      expect(res.earnRateClassPackage).toBe(0);
+      expect(res.allowPartialRedemption).toBe(true);
+    });
+
+    it("aceita taxa de categoria 0 como 'sem acúmulo' e não rejeita", async () => {
+      const ctx = mkQueueCtx([
+        [
+          {
+            id: "setting-2",
+            tenant_id: TENANT_ID,
+            enabled: true,
+            earn_rate_cents_per_point: 100,
+            earn_rate_copa: 0,
+            earn_rate_court_rental: 0,
+            earn_rate_class_package: 0,
+            redemption_points_per_real: 50,
+            max_redemption_percentage: 30,
+            allow_partial_redemption: false,
+            allowed_participants: "affiliates_only",
+            expiration_days: 90,
+          },
+        ],
+      ]);
+
+      const res = await upsertPointsSettings(ctx, {
+        enabled: true,
+        earnRateCentsPerPoint: 100,
+        earnRateCopa: 0,
+        earnRateCourtRental: 0,
+        earnRateClassPackage: 0,
+        redemptionPointsPerReal: 50,
+        maxRedemptionPercentage: 30,
+        allowPartialRedemption: false,
+        allowedParticipants: "affiliates_only",
+        expirationDays: 90,
+      });
+
+      expect(res.earnRateCopa).toBe(0);
+      expect(res.allowPartialRedemption).toBe(false);
+      expect(res.allowedParticipants).toBe("affiliates_only");
     });
   });
 
@@ -116,8 +178,12 @@ describe("points.service", () => {
             tenant_id: TENANT_ID,
             enabled: true,
             earn_rate_cents_per_point: 100,
+            earn_rate_copa: null,
+            earn_rate_court_rental: null,
+            earn_rate_class_package: null,
             redemption_points_per_real: 100, // 100 pontos = R$ 1,00 (100 centavos)
             max_redemption_percentage: 50,  // máx 50% da comanda
+            allow_partial_redemption: true,
             allowed_participants: "all",
             expiration_days: 180,
           },
@@ -143,8 +209,12 @@ describe("points.service", () => {
             tenant_id: TENANT_ID,
             enabled: true,
             earn_rate_cents_per_point: 100,
+            earn_rate_copa: null,
+            earn_rate_court_rental: null,
+            earn_rate_class_package: null,
             redemption_points_per_real: 100,
             max_redemption_percentage: 50,
+            allow_partial_redemption: true,
             allowed_participants: "all",
             expiration_days: 180,
           },

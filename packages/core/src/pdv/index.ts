@@ -17,6 +17,8 @@ export {
   cancelComandaItem,
   ReopenComandaInputSchema,
   reopenComanda,
+  TransferItemsInputSchema,
+  transferItemsBetweenComandas,
   type Comanda,
   type ComandaItemView,
   type ComandaPaymentView,
@@ -29,6 +31,7 @@ export {
   type CloseComandaResult,
   type CancelComandaItemResult,
   type ReopenComandaResult,
+  type TransferItemsResult,
 } from "./comanda.service";
 
 export {

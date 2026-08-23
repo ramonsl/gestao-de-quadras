@@ -1,6 +1,7 @@
+import { cookies } from "next/headers";
 import { requireSession, arenaContext } from "@/lib/session";
 import { getWhatsAppConnectionStatus } from "@gestao-de-quadras/core/whatsapp/whatsapp-connection.service";
-import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppSidebar, SIDEBAR_COLLAPSED_COOKIE } from "@/components/layout/app-sidebar";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
   const isAdmin = session.role === "admin";
+
+  const cookieStore = await cookies();
+  const initialCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "true";
 
   const whatsappStatus = await getWhatsAppConnectionStatus(
     arenaContext({ id: session.userId, tenantId: session.tenantId })
@@ -27,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           isAdmin,
         }}
         initialWhatsAppStatus={whatsappStatus.status}
+        initialCollapsed={initialCollapsed}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">{children}</div>

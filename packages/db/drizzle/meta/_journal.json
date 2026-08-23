@@ -99,6 +99,13 @@
       "when": 1786815940937,
       "tag": "0013_pdv06_wpp_class_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1787644800000,
+      "tag": "0014_pts01_per_category_earn_rates",
+      "breakpoints": true
     }
   ]
 }

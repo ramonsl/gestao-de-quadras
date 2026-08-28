@@ -1,5 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 import { getDatabaseUrl } from "./env";
 
@@ -48,3 +50,11 @@ export const db = drizzle(sqlConnection, {
   schema,
   logger: isLoggingEnabled,
 });
+
+/**
+ * Conexão stateful reservada a unidades de trabalho que precisam de transação
+ * real (fechamento/reabertura de comanda). Leituras comuns continuam no Neon
+ * HTTP. O pool é pequeno para não multiplicar conexões em runtimes serverless.
+ */
+const transactionalSql = postgres(databaseUrl, { max: 3, prepare: false });
+export const transactionalDb = drizzlePostgres(transactionalSql, { schema });

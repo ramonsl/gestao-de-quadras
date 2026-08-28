@@ -1,6 +1,6 @@
 import type { CustomerProfile360 } from "@gestao-de-quadras/core/customers/customer-profile.service";
 import { Badge } from "@/components/ui/badge";
-import { Cake, Globe, MessageCircle, Mail } from "lucide-react";
+import { Cake, Crown, Globe, MessageCircle, Mail } from "lucide-react";
 
 function initials(name: string): string {
   return name
@@ -43,10 +43,14 @@ export function ProfileHeader({ profile }: { profile: CustomerProfile360 }) {
             <Badge variant={optIn.optIn ? "default" : "outline"} className="gap-1">
               LGPD: {optIn.optIn ? "Opt-in ativo" : "Sem consentimento"}
             </Badge>
-            {/* Filiação (FIL-01) ainda não implementada — placeholder. */}
-            <Badge variant="outline" className="text-[var(--text-disabled)]">
-              Filiação · em breve
-            </Badge>
+            {profile.membership ? (
+              <Badge variant={profile.membership.eligibleToday ? "default" : "outline"} className="gap-1">
+                <Crown className="size-3" /> {profile.membership.planName}
+                {!profile.membership.eligibleToday && " · fora da vigência"}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[var(--text-disabled)]">Sem filiação</Badge>
+            )}
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-[var(--text-2)]">

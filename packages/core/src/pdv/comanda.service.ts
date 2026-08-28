@@ -21,6 +21,11 @@ export interface Comanda {
   openedByUserId: string;
   createdAt: Date;
   updatedAt: Date;
+  grossTotalCents: number | null;
+  membershipDiscountCents: number | null;
+  netTotalCents: number | null;
+  appliedMembershipPlanId: string | null;
+  appliedMembershipPlanName: string | null;
 }
 
 export interface ComandaItemView {
@@ -39,6 +44,9 @@ export interface ComandaItemView {
   /** Snapshot imutável do preço unitário (centavos) — regra 10, CLAUDE.md. */
   unitPriceCentsAtSale: number;
   lineTotalCents: number;
+  categoryAtSale: string | null;
+  membershipDiscountPercent: number;
+  membershipDiscountCents: number;
   operatorUserId: string;
   createdAt: Date;
 }
@@ -87,6 +95,11 @@ type ComandaRow = {
   opened_by_user_id: string;
   created_at: Date;
   updated_at: Date;
+  gross_total_cents?: number | null;
+  membership_discount_cents?: number | null;
+  net_total_cents?: number | null;
+  applied_membership_plan_id?: string | null;
+  applied_membership_plan_name?: string | null;
 };
 
 type ComandaItemRow = {
@@ -101,6 +114,9 @@ type ComandaItemRow = {
   unit_price_cents_at_sale: number;
   operator_user_id: string;
   created_at: Date;
+  category_at_sale?: string | null;
+  membership_discount_percent?: number;
+  membership_discount_cents?: number;
 };
 
 type ComandaPaymentRow = {
@@ -115,8 +131,12 @@ type ComandaPaymentRow = {
   created_at: Date;
 };
 
-const COMANDA_COLS = sql`id, tenant_id, customer_id, status, opened_by_user_id, created_at, updated_at`;
-const ITEM_COLS = sql`id, tenant_id, comanda_id, item_type, product_id, class_package_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id, created_at`;
+const COMANDA_COLS = sql`id, tenant_id, customer_id, status, opened_by_user_id, created_at, updated_at,
+  gross_total_cents, membership_discount_cents, net_total_cents,
+  applied_membership_plan_id, applied_membership_plan_name`;
+const ITEM_COLS = sql`id, tenant_id, comanda_id, item_type, product_id, class_package_id,
+  product_name_at_sale, category_at_sale, quantity, unit_price_cents_at_sale,
+  membership_discount_percent, membership_discount_cents, operator_user_id, created_at`;
 
 function toComanda(row: ComandaRow): Comanda {
   return {
@@ -127,6 +147,11 @@ function toComanda(row: ComandaRow): Comanda {
     openedByUserId: row.opened_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    grossTotalCents: row.gross_total_cents ?? null,
+    membershipDiscountCents: row.membership_discount_cents ?? null,
+    netTotalCents: row.net_total_cents ?? null,
+    appliedMembershipPlanId: row.applied_membership_plan_id ?? null,
+    appliedMembershipPlanName: row.applied_membership_plan_name ?? null,
   };
 }
 
@@ -142,6 +167,9 @@ function toItemView(row: ComandaItemRow): ComandaItemView {
     quantity: row.quantity,
     unitPriceCentsAtSale: row.unit_price_cents_at_sale,
     lineTotalCents: row.quantity * row.unit_price_cents_at_sale,
+    categoryAtSale: row.category_at_sale ?? null,
+    membershipDiscountPercent: row.membership_discount_percent ?? 0,
+    membershipDiscountCents: row.membership_discount_cents ?? 0,
     operatorUserId: row.operator_user_id,
     createdAt: row.created_at,
   };
@@ -259,8 +287,8 @@ export async function addItemToComanda(
   // (CAD-02 AC3 aponta o débito para o FECHAMENTO da comanda — PDV-07).
   const insertResult = await ctx.db.execute<ComandaItemRow>(
     sql`INSERT INTO comanda_items
-          (tenant_id, comanda_id, item_type, product_id, product_name_at_sale, quantity, unit_price_cents_at_sale, operator_user_id)
-        VALUES (${ctx.tenantId}, ${data.comandaId}, 'product', ${data.productId}, ${product.name}, ${data.quantity},
+          (tenant_id, comanda_id, item_type, product_id, product_name_at_sale, category_at_sale, quantity, unit_price_cents_at_sale, operator_user_id)
+        VALUES (${ctx.tenantId}, ${data.comandaId}, 'product', ${data.productId}, ${product.name}, ${product.category}, ${data.quantity},
                 ${product.salePriceCents}, ${ctx.actorUserId})
         RETURNING ${ITEM_COLS}`
   );
@@ -373,6 +401,8 @@ export async function getComandaWithItems(
     ComandaRow & { customer_name: string | null; customer_whatsapp: string | null; global_customer_id: string | null }
   >(
     sql`SELECT c.id, c.tenant_id, c.customer_id, c.status, c.opened_by_user_id, c.created_at, c.updated_at,
+               c.gross_total_cents, c.membership_discount_cents, c.net_total_cents,
+               c.applied_membership_plan_id, c.applied_membership_plan_name,
                cu.name AS customer_name, cu.whatsapp AS customer_whatsapp,
                cu.global_customer_id AS global_customer_id
         FROM comandas c
@@ -391,7 +421,10 @@ export async function getComandaWithItems(
         ORDER BY created_at ASC`
   );
   const items = rows<ComandaItemRow>(itemsResult).map(toItemView);
-  const totalCents = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
+  const grossItemsCents = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
+  const totalCents = comandaRow.status === "closed" && comandaRow.net_total_cents != null
+    ? Number(comandaRow.net_total_cents)
+    : grossItemsCents;
 
   const paymentsResult = await ctx.db.execute<ComandaPaymentRow>(
     sql`SELECT id, tenant_id, comanda_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id, created_at
@@ -544,8 +577,10 @@ export const PaymentInputSchema = z.object({
 
 export const CloseComandaInputSchema = z.object({
   comandaId: z.string().uuid(),
+  /** Interno: identifica a versão do settlement transacional (FIL-01). */
+  settlementId: z.string().uuid().optional(),
   discountCents: z.number().int().nonnegative().optional().default(0),
-  payments: z.array(PaymentInputSchema).min(1),
+  payments: z.array(PaymentInputSchema),
 });
 
 export type CloseComandaResult =
@@ -619,7 +654,12 @@ export async function closeComanda(
 
     // Calcula a quantidade de pontos que precisam ser resgatados
     const pointsToRedeem = Math.ceil((totalPointsCents * pointsSummary.redemptionPointsPerReal) / 100);
-    const redeemRes = await redeemPoints(ctx, comandaRow.customer_id, pointsToRedeem, data.comandaId);
+    const redeemRes = await redeemPoints(
+      ctx,
+      comandaRow.customer_id,
+      pointsToRedeem,
+      data.settlementId ?? data.comandaId
+    );
     if (!redeemRes.success) {
       return { success: false, reason: "points_insufficient_balance" };
     }
@@ -688,8 +728,8 @@ export async function closeComanda(
   for (const p of processedPayments) {
     const payResult = await ctx.db.execute<ComandaPaymentRow>(
       sql`INSERT INTO comanda_payments
-            (tenant_id, comanda_id, cash_session_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id)
-          VALUES (${ctx.tenantId}, ${data.comandaId}, ${cashSessionId}, ${p.method}, ${p.amountCents}, ${p.receivedCents}, ${p.changeCents}, ${ctx.actorUserId})
+            (tenant_id, comanda_id, settlement_id, cash_session_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id)
+          VALUES (${ctx.tenantId}, ${data.comandaId}, ${data.settlementId ?? null}, ${cashSessionId}, ${p.method}, ${p.amountCents}, ${p.receivedCents}, ${p.changeCents}, ${ctx.actorUserId})
           RETURNING id, tenant_id, comanda_id, payment_method, amount_cents, received_cents, change_cents, operator_user_id, created_at`
     );
     paymentViews.push(toPaymentView(rows<ComandaPaymentRow>(payResult)[0]));
@@ -705,11 +745,9 @@ export async function closeComanda(
     totalChangeCents,
   });
 
-  // PDV-06: creditar saldo de aulas para itens class_package desta comanda.
-  // Erro não reverte o pagamento — é logado para reconciliação manual.
-  await creditClassPackageBalances(ctx, data.comandaId, comandaRow.customer_id).catch((err) => {
-    console.error("[pdv] creditClassPackageBalances falhou para comanda", data.comandaId, err);
-  });
+  // PDV-06: creditar saldo de aulas. No fluxo FIL-01 esta operação participa
+  // da mesma transação do pagamento e qualquer falha reverte o fechamento.
+  await creditClassPackageBalances(ctx, data.comandaId, comandaRow.customer_id, data.settlementId ?? null);
 
   return { success: true, comanda, payments: paymentViews, totalChangeCents };
 }
@@ -719,7 +757,8 @@ export async function closeComanda(
 async function creditClassPackageBalances(
   ctx: TenantContext,
   comandaId: string,
-  customerId: string | null
+  customerId: string | null,
+  settlementId: string | null
 ): Promise<void> {
   if (!customerId) return;
 
@@ -752,8 +791,8 @@ async function creditClassPackageBalances(
     // ON CONFLICT garante idempotência: re-close (reopen + close) não gera crédito duplo
     await ctx.db.execute(
       sql`INSERT INTO student_class_balance
-            (tenant_id, global_customer_id, class_package_id, comanda_item_id, remaining_classes, purchased_at)
-          VALUES (${ctx.tenantId}, ${globalCustomerId}, ${item.class_package_id}, ${item.item_id}, ${remainingClasses}, now())
+            (tenant_id, global_customer_id, class_package_id, comanda_item_id, settlement_id, remaining_classes, purchased_at)
+          VALUES (${ctx.tenantId}, ${globalCustomerId}, ${item.class_package_id}, ${item.item_id}, ${settlementId}, ${remainingClasses}, now())
           ON CONFLICT (tenant_id, comanda_item_id) DO NOTHING`
     );
   }
@@ -1185,5 +1224,3 @@ async function enqueueTransferCorrectionNotification(
     bodyText,
   });
 }
-
-

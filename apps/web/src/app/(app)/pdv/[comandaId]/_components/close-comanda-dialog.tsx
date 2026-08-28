@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ClipboardList } from "lucide-react";
 import { formatCentsToBRL } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { closeComandaAction } from "../_actions/close-comanda.action";
+import { closeComandaAction, getSettlementPreviewAction } from "../_actions/close-comanda.action";
 import { getCustomerPointsSummaryAction } from "../../_actions/points.actions";
 import type { CustomerPointsSummary } from "@gestao-de-quadras/core/points";
 import type { PaymentMethodEnum } from "@gestao-de-quadras/core/pdv";
 import type { z } from "zod";
+import type { SettlementPreview } from "@gestao-de-quadras/core/membership";
 
 type PaymentMethod = z.infer<typeof PaymentMethodEnum>;
 
@@ -53,16 +55,37 @@ export function CloseComandaDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pointsSummary, setPointsSummary] = useState<CustomerPointsSummary | null>(null);
+  const [settlementPreview, setSettlementPreview] = useState<SettlementPreview | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const effectiveTotalCents = settlementPreview?.netTotalCents ?? totalCents;
+
+  useEffect(() => {
+    if (!open) return;
+    setIsLoadingPreview(true);
+    setErrorMessage(null);
+    void getSettlementPreviewAction(comandaId)
+      .then((preview) => {
+        setSettlementPreview(preview);
+        if (!preview) {
+          setErrorMessage("Não foi possível calcular o fechamento desta comanda.");
+          return;
+        }
+        const amount = (preview.netTotalCents / 100).toFixed(2).replace(".", ",");
+        setPayments(preview.netTotalCents === 0 ? [] : [{ id: "1", method: "pix", amountStr: amount, receivedStr: "" }]);
+      })
+      .catch(() => setErrorMessage("Não foi possível calcular os benefícios da filiação."))
+      .finally(() => setIsLoadingPreview(false));
+  }, [open, comandaId]);
 
   useEffect(() => {
     if (open && customerId) {
-      void getCustomerPointsSummaryAction(customerId, totalCents).then((res) => {
+      void getCustomerPointsSummaryAction(customerId, effectiveTotalCents).then((res) => {
         setPointsSummary(res);
       });
     } else {
       setPointsSummary(null);
     }
-  }, [open, customerId, totalCents]);
+  }, [open, customerId, effectiveTotalCents]);
 
   // Helper para converter "12,50" -> 1250 centavos
   function parseCents(valueStr: string): number {
@@ -74,7 +97,7 @@ export function CloseComandaDialog({
 
   const { totalAllocatedCents, totalChangeCents, isValid, changeByRow } = useMemo(() => {
     let allocated = 0; // Σ valor a cobrar (define "falta alocar")
-    let remaining = totalCents; // saldo da comanda ainda não coberto
+    let remaining = effectiveTotalCents; // saldo da comanda ainda não coberto
     let totalChange = 0;
     let valid = true;
     const changeByRow: Record<string, number> = {};
@@ -96,17 +119,17 @@ export function CloseComandaDialog({
       totalChange += change;
     }
 
-    if (allocated < totalCents) valid = false;
+    if (allocated < effectiveTotalCents) valid = false;
 
     return {
       totalAllocatedCents: allocated,
       totalChangeCents: totalChange,
-      isValid: valid && payments.length > 0,
+      isValid: effectiveTotalCents === 0 ? payments.length === 0 : valid && payments.length > 0,
       changeByRow,
     };
-  }, [payments, totalCents]);
+  }, [payments, effectiveTotalCents]);
 
-  const remainingCents = Math.max(0, totalCents - totalAllocatedCents);
+  const remainingCents = Math.max(0, effectiveTotalCents - totalAllocatedCents);
 
   function handleAddPaymentRow() {
     const remainingStr = remainingCents > 0
@@ -135,7 +158,7 @@ export function CloseComandaDialog({
   }
 
   async function handleConfirmClose() {
-    if (!isValid || isSubmitting) return;
+    if (!isValid || isSubmitting || !settlementPreview) return;
     setIsSubmitting(true);
     setErrorMessage(null);
 
@@ -150,8 +173,16 @@ export function CloseComandaDialog({
         };
       });
 
-      const result = await closeComandaAction(comandaId, payload);
+      const result = await closeComandaAction(comandaId, payload, settlementPreview.settlementToken);
       if (!result.success) {
+        if (result.reason === "settlement_changed") {
+          setSettlementPreview(result.preview);
+          const amount = (result.preview.netTotalCents / 100).toFixed(2).replace(".", ",");
+          setPayments(result.preview.netTotalCents === 0 ? [] : [{ id: "1", method: "pix", amountStr: amount, receivedStr: "" }]);
+          setErrorMessage("A comanda ou a filiação mudou. Confira a nova prévia e confirme novamente.");
+          setIsSubmitting(false);
+          return;
+        }
         setErrorMessage(
           result.reason === "insufficient_payment"
             ? "O valor total pago é menor que o valor da comanda."
@@ -192,11 +223,23 @@ export function CloseComandaDialog({
           <div className="p-3.5 bg-[var(--bg-sunken)] border border-[var(--border)] rounded-[var(--radius-card)] space-y-1.5 text-sm">
             <div className="flex justify-between font-medium text-[var(--text-2)]">
               <span>Total da Comanda:</span>
-              <span className="font-bold text-[var(--text-1)]">{formatCentsToBRL(totalCents)}</span>
+              <span className="font-bold text-[var(--text-1)]">{formatCentsToBRL(settlementPreview?.grossTotalCents ?? totalCents)}</span>
             </div>
+            {(settlementPreview?.discountTotalCents ?? 0) > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-[var(--success)]">
+                  <span>Benefício {settlementPreview?.membershipPlanName}</span>
+                  <span>- {formatCentsToBRL(settlementPreview?.discountTotalCents ?? 0)}</span>
+                </div>
+                <div className="flex justify-between border-t border-[var(--border)] pt-1 font-semibold text-[var(--text-1)]">
+                  <span>Total com benefício</span>
+                  <span>{formatCentsToBRL(effectiveTotalCents)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-xs">
               <span className="text-[var(--text-3)]">Total Alocado nos Pagamentos:</span>
-              <span className={totalAllocatedCents >= totalCents ? "text-emerald-600 font-bold" : "font-semibold"}>
+              <span className={totalAllocatedCents >= effectiveTotalCents ? "text-[var(--success)] font-bold" : "font-semibold"}>
                 {formatCentsToBRL(totalAllocatedCents)}
               </span>
             </div>
@@ -250,7 +293,7 @@ export function CloseComandaDialog({
                 }}
                 className="bg-white border-amber-300 hover:bg-amber-100 text-amber-950 text-xs shrink-0 font-bold"
               >
-                📋 Saldo Devedor
+                <ClipboardList /> Saldo Devedor
               </Button>
             </div>
           )}
@@ -320,12 +363,12 @@ export function CloseComandaDialog({
                   <div className="pt-1.5 border-t border-dashed border-[var(--border)] space-y-1">
                     {!customerId ? (
                       <p className="text-[11px] text-[var(--danger)] font-medium">
-                        ⚠️ O resgate de pontos só está disponível para comandas com cliente identificado.
+                        <AlertTriangle className="mr-1 inline size-3" /> O resgate de pontos só está disponível para comandas com cliente identificado.
                       </p>
                     ) : pointsSummary ? (
                       !pointsSummary.enabled ? (
                         <p className="text-[11px] text-[var(--danger)] font-medium">
-                          ⚠️ O programa de pontos está desativado nas configurações desta arena.
+                          <AlertTriangle className="mr-1 inline size-3" /> O programa de pontos está desativado nas configurações desta arena.
                         </p>
                       ) : (
                         <div className="p-2 bg-emerald-50/70 border border-emerald-200 rounded text-[11px] text-emerald-950 space-y-0.5">
@@ -396,11 +439,11 @@ export function CloseComandaDialog({
             </Button>
             <Button
               type="button"
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || isLoadingPreview || !settlementPreview}
               onClick={() => void handleConfirmClose()}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
             >
-              {isSubmitting ? "Finalizando..." : "Finalizar e Fechar Comanda"}
+              {isLoadingPreview ? "Calculando..." : isSubmitting ? "Finalizando..." : "Finalizar e Fechar Comanda"}
             </Button>
           </div>
         </div>
@@ -408,4 +451,3 @@ export function CloseComandaDialog({
     </Dialog>
   );
 }
-

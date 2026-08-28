@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   date,
   index,
+  check,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -235,6 +236,11 @@ export const comandas = pgTable(
     customerId: uuid("customer_id"),
     /** open | closed — fechamento/pagamento é PDV-07, fora desta fase. */
     status: varchar("status", { length: 20 }).default("open").notNull(),
+    grossTotalCents: integer("gross_total_cents"),
+    membershipDiscountCents: integer("membership_discount_cents"),
+    netTotalCents: integer("net_total_cents"),
+    appliedMembershipPlanId: uuid("applied_membership_plan_id"),
+    appliedMembershipPlanName: varchar("applied_membership_plan_name", { length: 120 }),
     openedByUserId: uuid("opened_by_user_id").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -270,14 +276,127 @@ export const comandaItems = pgTable(
     classPackageId: uuid("class_package_id"),
     /** Snapshot do total de aulas do pacote no momento do lançamento (PDV-06 — regra 10). null para tipos product e court_rental. */
     classCountAtSale: integer("class_count_at_sale"),
+    /** Categoria imutável usada para calcular benefícios de filiação. */
+    categoryAtSale: varchar("category_at_sale", { length: 100 }),
     productNameAtSale: varchar("product_name_at_sale", { length: 255 }).notNull(),
     quantity: integer("quantity").notNull(),
     unitPriceCentsAtSale: integer("unit_price_cents_at_sale").notNull(),
+    membershipDiscountPercent: integer("membership_discount_percent").default(0).notNull(),
+    membershipDiscountCents: integer("membership_discount_cents").default(0).notNull(),
     operatorUserId: uuid("operator_user_id").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
     tenantComandaIdx: index("comanda_items_tenant_comanda_idx").on(t.tenantId, t.comandaId),
+  })
+);
+
+// --- Filiação / clube de benefícios (FIL-01) -------------------------------
+
+export const membershipPlans = pgTable(
+  "membership_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description").notNull(),
+    cyclePriceCents: integer("cycle_price_cents").notNull(),
+    billingPeriod: varchar("billing_period", { length: 20 }).notNull(),
+    productDiscountPercent: integer("product_discount_percent").default(0).notNull(),
+    courtRentalDiscountPercent: integer("court_rental_discount_percent").default(0).notNull(),
+    classPackageDiscountPercent: integer("class_package_discount_percent").default(0).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantNameIdx: index("membership_plans_tenant_name_idx").on(t.tenantId, t.name),
+    pricePositive: check("membership_plans_price_positive", sql`${t.cyclePriceCents} > 0`),
+    billingPeriodValid: check(
+      "membership_plans_billing_period_valid",
+      sql`${t.billingPeriod} IN ('monthly', 'semiannual', 'annual')`
+    ),
+    discountsValid: check(
+      "membership_plans_discounts_valid",
+      sql`${t.productDiscountPercent} BETWEEN 0 AND 100 AND ${t.courtRentalDiscountPercent} BETWEEN 0 AND 100 AND ${t.classPackageDiscountPercent} BETWEEN 0 AND 100`
+    ),
+  })
+);
+
+export const membershipPlanProductCategories = pgTable(
+  "membership_plan_product_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    membershipPlanId: uuid("membership_plan_id")
+      .notNull()
+      .references(() => membershipPlans.id, { onDelete: "cascade" }),
+    category: varchar("category", { length: 100 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    categoryUnique: uniqueIndex("membership_plan_categories_unique").on(
+      t.tenantId,
+      t.membershipPlanId,
+      t.category
+    ),
+  })
+);
+
+export const customerMemberships = pgTable(
+  "customer_memberships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    customerId: uuid("customer_id").notNull(),
+    membershipPlanId: uuid("membership_plan_id")
+      .notNull()
+      .references(() => membershipPlans.id),
+    startsOn: date("starts_on").notNull(),
+    endsOn: date("ends_on"),
+    status: varchar("status", { length: 20 }).default("active").notNull(),
+    endedAt: timestamp("ended_at"),
+    endedByUserId: uuid("ended_by_user_id"),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    oneActivePerCustomer: uniqueIndex("customer_memberships_one_active_idx")
+      .on(t.tenantId, t.customerId)
+      .where(sql`${t.status} = 'active'`),
+    planIdx: index("customer_memberships_plan_idx").on(t.tenantId, t.membershipPlanId),
+    datesValid: check(
+      "customer_memberships_dates_valid",
+      sql`${t.endsOn} IS NULL OR ${t.endsOn} >= ${t.startsOn}`
+    ),
+  })
+);
+
+export const comandaSettlements = pgTable(
+  "comanda_settlements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: tenantId(),
+    comandaId: uuid("comanda_id").notNull(),
+    version: integer("version").notNull(),
+    status: varchar("status", { length: 20 }).default("active").notNull(),
+    settlementToken: varchar("settlement_token", { length: 64 }).notNull(),
+    membershipPlanId: uuid("membership_plan_id"),
+    membershipPlanName: varchar("membership_plan_name", { length: 120 }),
+    grossTotalCents: integer("gross_total_cents").notNull(),
+    discountTotalCents: integer("discount_total_cents").notNull(),
+    netTotalCents: integer("net_total_cents").notNull(),
+    closedByUserId: uuid("closed_by_user_id").notNull(),
+    closedAt: timestamp("closed_at").defaultNow().notNull(),
+    reversedByUserId: uuid("reversed_by_user_id"),
+    reversedAt: timestamp("reversed_at"),
+  },
+  (t) => ({
+    versionUnique: uniqueIndex("comanda_settlements_version_unique").on(t.tenantId, t.comandaId, t.version),
+    oneActive: uniqueIndex("comanda_settlements_one_active_idx")
+      .on(t.tenantId, t.comandaId)
+      .where(sql`${t.status} = 'active'`),
   })
 );
 
@@ -293,6 +412,7 @@ export const comandaPayments = pgTable(
     comandaId: uuid("comanda_id")
       .notNull()
       .references(() => comandas.id, { onDelete: "cascade" }),
+    settlementId: uuid("settlement_id").references(() => comandaSettlements.id),
     cashSessionId: uuid("cash_session_id").references(() => cashSessions.id, { onDelete: "set null" }),
     /** dinheiro | pix | cartao_credito | cartao_debito | pontos */
     paymentMethod: varchar("payment_method", { length: 50 }).notNull(),
@@ -500,6 +620,7 @@ export const studentClassBalance = pgTable(
     classPackageId: uuid("class_package_id").notNull(),
     /** Chave de idempotência: garante que re-close (reopen + close) não gera crédito duplo. */
     comandaItemId: uuid("comanda_item_id").notNull(),
+    settlementId: uuid("settlement_id").references(() => comandaSettlements.id),
     remainingClasses: integer("remaining_classes").notNull(),
     purchasedAt: timestamp("purchased_at").defaultNow().notNull(),
     expiresAt: timestamp("expires_at"),
@@ -869,6 +990,10 @@ export const TENANT_SCOPED_TABLES = [
   "customer_points_transactions",
   "whatsapp_message_log",
   "tenant_print_configs",
+  "membership_plans",
+  "membership_plan_product_categories",
+  "customer_memberships",
+  "comanda_settlements",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -943,4 +1068,9 @@ export type WhatsappMessageLog = typeof whatsappMessageLog.$inferSelect;
 export type NewWhatsappMessageLog = typeof whatsappMessageLog.$inferInsert;
 export type TenantPrintConfig = typeof tenantPrintConfigs.$inferSelect;
 export type NewTenantPrintConfig = typeof tenantPrintConfigs.$inferInsert;
-
+export type MembershipPlan = typeof membershipPlans.$inferSelect;
+export type NewMembershipPlan = typeof membershipPlans.$inferInsert;
+export type MembershipPlanProductCategory = typeof membershipPlanProductCategories.$inferSelect;
+export type CustomerMembership = typeof customerMemberships.$inferSelect;
+export type NewCustomerMembership = typeof customerMemberships.$inferInsert;
+export type ComandaSettlement = typeof comandaSettlements.$inferSelect;

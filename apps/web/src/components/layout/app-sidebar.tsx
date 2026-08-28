@@ -18,6 +18,7 @@ import {
   Building2,
   Printer,
   Award,
+  Crown,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -103,6 +104,9 @@ export function AppSidebar({ session, initialWhatsAppStatus, initialCollapsed = 
       : []),
     ...(isAdmin || session.role === "gerente"
       ? [{ href: "/admin/impressao", label: "Impressão Térmica", icon: Printer }]
+      : []),
+    ...(isAdmin
+      ? [{ href: "/admin/filiacao", label: "Planos e Filiações", icon: Crown }]
       : []),
   ];
 

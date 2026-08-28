@@ -218,6 +218,10 @@ describe("customer-profile.service (CAD-08)", () => {
             { id: "com-2", status: "open", created_at: new Date("2026-07-05T12:00:00Z"), item_count: "1", total_cents: "3000" },
           ],
         },
+        {
+          match: /from customer_memberships cm/,
+          rows: [{ plan_name: "Clube Ouro", starts_on: "2026-08-01", ends_on: null, eligible_today: true }],
+        },
         { match: /from customers /, rows: [makeCustomerRow()] },
       ]);
 
@@ -249,6 +253,7 @@ describe("customer-profile.service (CAD-08)", () => {
       // Aniversariante do mês (nasc. 08, now 08).
       expect(profile.isBirthdayThisMonth).toBe(true);
       expect(profile.optIn.optIn).toBe(true);
+      expect(profile.membership?.planName).toBe("Clube Ouro");
     });
 
     it("não marca bloqueio quando o saldo devedor está abaixo do limite", async () => {
@@ -260,6 +265,7 @@ describe("customer-profile.service (CAD-08)", () => {
         { match: /from student_class_balance/, rows: [] },
         { match: /from comanda_payments/, rows: [] },
         { match: /from comandas c/, rows: [] },
+        { match: /from customer_memberships cm/, rows: [] },
         { match: /from customers /, rows: [makeCustomerRow({ global_customer_id: null })] },
       ]);
 

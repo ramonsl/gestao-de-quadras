@@ -210,6 +210,40 @@ export interface CustomerProfile360 {
   classBalances: CustomerClassBalanceItem[];
   ltv: CustomerProfileLtv;
   comandas: CustomerComandaHistoryItem[];
+  membership: {
+    planName: string;
+    startsOn: string;
+    endsOn: string | null;
+    eligibleToday: boolean;
+  } | null;
+}
+
+async function getCustomerMembershipSummary(ctx: TenantContext, customerId: string) {
+  const result = await ctx.db.execute<{
+    plan_name: string;
+    starts_on: string;
+    ends_on: string | null;
+    eligible_today: boolean;
+  }>(sql`SELECT mp.name AS plan_name, cm.starts_on, cm.ends_on,
+                (mp.is_active = true
+                 AND cm.starts_on <= (now() AT TIME ZONE 'UTC')::date
+                 AND (cm.ends_on IS NULL OR cm.ends_on >= (now() AT TIME ZONE 'UTC')::date)) AS eligible_today
+         FROM customer_memberships cm
+         JOIN membership_plans mp ON mp.id = cm.membership_plan_id AND mp.tenant_id = cm.tenant_id
+         WHERE cm.tenant_id = ${ctx.tenantId} AND cm.customer_id = ${customerId} AND cm.status = 'active'
+         LIMIT 1`);
+  const row = rows<{
+    plan_name: string;
+    starts_on: string;
+    ends_on: string | null;
+    eligible_today: boolean;
+  }>(result)[0];
+  return row ? {
+    planName: row.plan_name,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on,
+    eligibleToday: row.eligible_today,
+  } : null;
 }
 
 function isBirthdayThisMonth(birthDate: string | null, now: Date): boolean {
@@ -235,12 +269,13 @@ export async function getCustomerProfile360(
   const customer = await getCustomerById(ctx, customerId);
   if (!customer) return null;
 
-  const [optIn, debitSummary, points, classBalances, comandas] = await Promise.all([
+  const [optIn, debitSummary, points, classBalances, comandas, membership] = await Promise.all([
     getCustomerOptInStatus(ctx, customerId),
     getCustomerDebitSummary(ctx, customerId),
     getCustomerPointsSummary(ctx, customerId),
     listCustomerClassBalances(ctx, customer.globalCustomerId),
     listCustomerComandas(ctx, customerId),
+    getCustomerMembershipSummary(ctx, customerId),
   ]);
 
   const totalPendingCents = debitSummary.totalPendingCents;
@@ -278,5 +313,6 @@ export async function getCustomerProfile360(
       rentalCount: 0,
     },
     comandas,
+    membership,
   };
 }
